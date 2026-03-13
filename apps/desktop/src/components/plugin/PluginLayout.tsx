@@ -27,29 +27,43 @@ function ProjectListSidebar({
 }) {
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-ghost-border flex items-center justify-between">
-        <span className="text-xs font-bold text-ghost-text-secondary uppercase tracking-wider">
+      {/* Ghost Session branding */}
+      <div className="px-3 pt-3.5 pb-3 flex items-center gap-2.5">
+        <svg width="26" height="26" viewBox="0 0 26 26" fill="none" className="shrink-0">
+          <circle cx="13" cy="13" r="11.5" stroke="#00FFC8" strokeWidth="2" fill="none" />
+          <circle cx="13" cy="13" r="7" stroke="#00FFC8" strokeWidth="2" fill="none" />
+          <circle cx="13" cy="13" r="2.5" fill="#00FFC8" />
+        </svg>
+        <span className="text-[15px] font-extrabold tracking-widest uppercase" style={{ background: 'linear-gradient(135deg, #00FFC8, #00B4D8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Ghost Session</span>
+      </div>
+
+      {/* Projects header */}
+      <div className="h-10 px-3 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-ghost-text-secondary uppercase tracking-wide">
           Projects
         </span>
         <button
           onClick={onCreate}
-          className="w-6 h-6 flex items-center justify-center rounded bg-ghost-green/10 text-ghost-green text-sm font-bold hover:bg-ghost-green/20"
+          className="w-5 h-5 flex items-center justify-center rounded text-ghost-text-muted hover:text-ghost-text-primary text-sm transition-colors"
         >
           +
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto px-2 pt-2 space-y-0.5">
         {projects.map((p) => (
           <button
             key={p.id}
             onClick={() => onSelect(p.id)}
-            className={`w-full text-left px-3 py-2.5 text-sm border-b border-ghost-border/50 transition-colors ${
+            className={`w-full text-left px-2 py-1.5 text-[15px] rounded transition-colors ${
               selectedId === p.id
-                ? 'bg-ghost-green/10 text-ghost-green font-semibold'
-                : 'text-ghost-text-secondary hover:bg-ghost-surface-light'
+                ? 'bg-ghost-surface-hover text-white font-medium'
+                : 'text-ghost-text-muted hover:bg-ghost-surface-hover/50 hover:text-ghost-text-secondary'
             }`}
           >
-            {p.name}
+            <span className="flex items-center gap-2">
+              <span className="text-ghost-text-muted text-lg">#</span>
+              {p.name}
+            </span>
           </button>
         ))}
       </div>
@@ -59,21 +73,23 @@ function ProjectListSidebar({
 
 function FriendsPanel({ friends }: { friends: { id: string; displayName: string; avatarUrl: string | null }[] }) {
   return (
-    <div className="border-t border-ghost-border">
-      <div className="p-3 border-b border-ghost-border">
-        <span className="text-xs font-bold text-ghost-text-secondary uppercase tracking-wider">
-          Friends
+    <div className="shrink-0">
+      <div className="px-3 py-2 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-ghost-text-muted uppercase tracking-wider">
+          Friends — {friends.length}
         </span>
       </div>
-      <div className="p-2 space-y-1">
+      <div className="px-2 space-y-px">
         {friends.length === 0 ? (
-          <p className="text-[10px] text-ghost-text-muted px-2 py-1 italic">No friends yet</p>
+          <p className="text-[13px] text-ghost-text-muted px-2 py-3 text-center italic">No friends yet</p>
         ) : (
           friends.map((f) => (
-            <div key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-ghost-surface-light">
-              <Avatar name={f.displayName} src={f.avatarUrl} size="sm" colour="#00FFC8" />
-              <span className="text-xs text-ghost-text-primary flex-1 truncate">{f.displayName}</span>
-              <span className="w-2 h-2 rounded-full bg-ghost-text-muted/30 shrink-0" />
+            <div key={f.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-ghost-surface-hover cursor-pointer group transition-colors">
+              <div className="relative">
+                <Avatar name={f.displayName} src={f.avatarUrl} size="sm" />
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-ghost-text-muted/40 border-2 border-ghost-surface" />
+              </div>
+              <span className="text-[13px] text-ghost-text-muted group-hover:text-ghost-text-primary flex-1 truncate transition-colors">{f.displayName}</span>
             </div>
           ))
         )}
@@ -89,29 +105,32 @@ function CollaboratorPanel({ members, onInvite, isOwner, onRemove }: {
   onRemove: (userId: string, name: string) => void;
 }) {
   return (
-    <div className="border-t border-ghost-border">
-      <div className="p-3 border-b border-ghost-border flex items-center justify-between">
-        <span className="text-xs font-bold text-ghost-text-secondary uppercase tracking-wider">
+    <div className="mt-1">
+      <div className="px-3 py-1.5 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-ghost-text-secondary uppercase tracking-wide">
           Collaborators
         </span>
         <button
           onClick={onInvite}
-          className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold text-ghost-purple bg-ghost-purple/10 border border-ghost-purple/30 hover:bg-ghost-purple/20 transition-colors"
+          className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium text-ghost-text-muted hover:text-ghost-text-primary transition-colors"
         >
-          <span>+</span> Invite
+          + Invite
         </button>
       </div>
-      <div className="p-2 space-y-1">
+      <div className="px-2 space-y-0.5">
         {[...members].sort((a, b) => (a.role === 'owner' ? -1 : b.role === 'owner' ? 1 : 0)).map((m) => (
-          <div key={m.userId} className="group flex items-center gap-2 px-2 py-1.5 rounded hover:bg-ghost-surface-light">
-            <Avatar name={m.displayName} src={m.avatarUrl} size="sm" colour={m.role === 'owner' ? '#FFD700' : '#00FFC8'} />
-            <span className="text-xs text-ghost-text-primary flex-1 truncate">{m.displayName}</span>
+          <div key={m.userId} className="group flex items-center gap-2.5 px-2 py-1.5 rounded hover:bg-ghost-surface-hover/50 cursor-pointer">
+            <div className="relative">
+              <Avatar name={m.displayName} src={m.avatarUrl} size="sm" colour={m.role === 'owner' ? '#F0B232' : '#23A559'} />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-ghost-online-green border-2 border-ghost-sidebar" />
+            </div>
+            <span className="text-[14px] text-ghost-text-muted flex-1 truncate hover:text-ghost-text-secondary">{m.displayName}</span>
             {m.role === 'owner' ? (
-              <span className="text-[8px] font-bold text-ghost-host-gold bg-ghost-host-gold/10 px-1.5 py-0.5 rounded">HOST</span>
+              <span className="text-[10px] font-semibold text-ghost-host-gold bg-ghost-host-gold/15 px-1.5 py-0.5 rounded">HOST</span>
             ) : isOwner ? (
               <button
                 onClick={() => onRemove(m.userId, m.displayName)}
-                className="opacity-0 group-hover:opacity-100 text-ghost-text-muted hover:text-red-400 transition-all"
+                className="opacity-0 group-hover:opacity-100 text-ghost-text-muted hover:text-ghost-error-red transition-all"
                 title={`Remove ${m.displayName}`}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -120,7 +139,6 @@ function CollaboratorPanel({ members, onInvite, isOwner, onRemove }: {
                 </svg>
               </button>
             ) : null}
-            <span className="w-2 h-2 rounded-full bg-ghost-green shrink-0" />
           </div>
         ))}
       </div>
@@ -130,20 +148,20 @@ function CollaboratorPanel({ members, onInvite, isOwner, onRemove }: {
 
 function SettingsPopup({ user, onSignOut, onClose }: { user: any; onSignOut: () => void; onClose: () => void }) {
   return (
-    <div className="absolute right-2 top-12 w-52 bg-ghost-surface border border-ghost-border rounded-lg shadow-xl z-50 p-3">
-      <div className="text-[10px] font-bold text-ghost-text-secondary uppercase tracking-wider mb-2">Account</div>
-      <div className="border-t border-ghost-border pt-2 mb-3">
-        <div className="flex items-center gap-2">
-          <Avatar name={user?.displayName || '?'} size="md" colour="#00FFC8" />
+    <div className="absolute right-2 top-12 w-56 bg-[#050508] rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.6)] z-50 p-2 border border-white/5">
+      <div className="p-2 mb-1">
+        <div className="flex items-center gap-2.5">
+          <Avatar name={user?.displayName || '?'} size="md" colour="#5865F2" />
           <div>
-            <p className="text-sm font-bold text-ghost-text-primary">{user?.displayName || 'Unknown'}</p>
-            <p className="text-[10px] text-ghost-text-muted">{user?.email || ''}</p>
+            <p className="text-sm font-semibold text-ghost-text-primary">{user?.displayName || 'Unknown'}</p>
+            <p className="text-[12px] text-ghost-text-muted">{user?.email || ''}</p>
           </div>
         </div>
       </div>
+      <div className="h-px bg-white/5 mx-1 mb-1" />
       <button
         onClick={onSignOut}
-        className="w-full px-3 py-2 text-xs font-semibold bg-ghost-surface-light border border-ghost-border rounded text-ghost-text-secondary hover:text-ghost-error-red hover:border-ghost-error-red transition-colors"
+        className="w-full px-2 py-1.5 text-[13px] text-left rounded text-ghost-text-secondary hover:bg-ghost-error-red hover:text-white transition-colors"
       >
         Sign Out
       </button>
@@ -153,9 +171,9 @@ function SettingsPopup({ user, onSignOut, onClose }: { user: any; onSignOut: () 
 
 function NotificationPopup({ invitations, onAccept, onDecline }: { invitations: Invitation[]; onAccept: (id: string) => void; onDecline: (id: string) => void }) {
   return (
-    <div className="absolute right-14 top-12 w-72 bg-ghost-surface border border-ghost-border rounded-lg shadow-xl z-50">
-      <div className="p-3 border-b border-ghost-border">
-        <span className="text-[10px] font-bold text-ghost-text-secondary uppercase tracking-wider">Invitations</span>
+    <div className="absolute right-14 top-12 w-72 bg-[#050508] rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.6)] z-50 border border-white/5">
+      <div className="p-3">
+        <span className="text-[11px] font-semibold text-ghost-text-secondary uppercase tracking-wide">Invitations</span>
       </div>
       {invitations.length === 0 ? (
         <div className="p-4 text-center text-xs text-ghost-text-muted italic">No pending invitations</div>
@@ -212,9 +230,9 @@ function InviteModal({ open, onClose, projectId }: { open: boolean; onClose: () 
   };
 
   return (
-    <div className="absolute right-2 top-12 w-72 bg-ghost-surface border border-ghost-border rounded-lg shadow-xl z-50 p-4">
+    <div className="absolute right-2 top-12 w-72 bg-[#050508] rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.6)] z-50 p-4 border border-white/5">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-bold text-ghost-text-secondary uppercase tracking-wider">Invite Collaborator</span>
+        <span className="text-[11px] font-semibold text-ghost-text-secondary uppercase tracking-wide">Invite Collaborator</span>
         <button onClick={onClose} className="text-ghost-text-muted hover:text-ghost-text-primary text-sm">X</button>
       </div>
       <input
@@ -224,7 +242,7 @@ function InviteModal({ open, onClose, projectId }: { open: boolean; onClose: () 
         onChange={(e) => setEmail(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
       />
-      <button onClick={handleInvite} className="w-full px-3 py-2 text-xs font-semibold bg-ghost-purple text-white rounded hover:bg-ghost-purple/80">
+      <button onClick={handleInvite} className="w-full px-3 py-2 text-[13px] font-medium bg-ghost-purple text-white rounded hover:bg-[#4752C4] transition-colors">
         Send Invite
       </button>
       {status && <p className={`text-xs mt-2 ${status === 'Invited!' ? 'text-ghost-green' : 'text-ghost-error-red'}`}>{status}</p>}
@@ -311,7 +329,7 @@ function Waveform({
     ctx.scale(dpr, dpr);
 
     // Background — matches JUCE GhostColours::waveformBg
-    ctx.fillStyle = '#0D1117';
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, w, h);
 
     const mid = h / 2;
@@ -439,7 +457,7 @@ function FullMixDropZone({ projectId, onFilesAdded }: { projectId: string; onFil
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
       className={`bg-ghost-surface rounded-lg overflow-hidden transition-colors border-2 border-dashed ${
-        dragOver ? 'border-ghost-green' : 'border-white/40'
+        dragOver ? 'border-ghost-green' : 'border-ghost-text-muted/30'
       }`}
     >
       <div className="flex items-center gap-3 px-3 py-2">
@@ -469,7 +487,7 @@ function FullMixDropZone({ projectId, onFilesAdded }: { projectId: string; onFil
               <div className="flex-1" />
               <button
                 onClick={handleBrowse}
-                className="px-3 py-1 text-xs font-semibold bg-ghost-surface-light border border-white/80 rounded-md text-white hover:text-ghost-green hover:border-ghost-green transition-colors shrink-0"
+                className="px-3 py-1 text-xs font-semibold bg-ghost-surface-light border border-ghost-text-muted/40 rounded-md text-white hover:text-ghost-green hover:border-ghost-green transition-colors shrink-0"
               >
                 + Add File
               </button>
@@ -651,23 +669,23 @@ function TransportBar() {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="h-14 bg-ghost-surface border-t border-ghost-border flex flex-col shrink-0">
+    <div className="h-14 bg-ghost-surface flex flex-col shrink-0">
       {/* Seek bar */}
       <div
-        className="h-1.5 bg-ghost-bg cursor-pointer hover:h-2.5 transition-all"
+        className="h-1 bg-ghost-bg cursor-pointer hover:h-2 transition-all group"
         onClick={handleSeek}
       >
-        <div className="h-full bg-ghost-green" style={{ width: `${progress}%` }} />
+        <div className="h-full bg-ghost-green group-hover:bg-ghost-green" style={{ width: `${progress}%` }} />
       </div>
 
       <div className="flex-1 flex items-center px-4 gap-3">
         {/* Play/Pause */}
         <button
           onClick={handlePlayPause}
-          className={`w-9 h-9 rounded-md border flex items-center justify-center transition-colors ${
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
             isPlaying
-              ? 'border-ghost-green text-ghost-green'
-              : 'border-ghost-border text-ghost-text-secondary hover:text-ghost-green hover:border-ghost-green'
+              ? 'bg-ghost-green text-black'
+              : 'bg-ghost-surface-hover text-ghost-text-secondary hover:bg-ghost-surface-hover hover:text-white'
           }`}
         >
           {isPlaying ? (
@@ -683,7 +701,7 @@ function TransportBar() {
         {/* Stop */}
         <button
           onClick={stop}
-          className="w-9 h-9 rounded-md border border-ghost-border flex items-center justify-center text-ghost-text-secondary hover:text-ghost-text-primary transition-colors"
+          className="w-8 h-8 rounded-full bg-ghost-surface-hover flex items-center justify-center text-ghost-text-secondary hover:text-white transition-colors"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
             <rect x="0" y="0" width="12" height="12" rx="1" />
@@ -768,7 +786,7 @@ function DropZone({ projectId, onFilesAdded }: { projectId: string; onFilesAdded
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
       className={`bg-ghost-surface rounded-lg overflow-hidden transition-colors border-2 border-dashed ${
-        dragOver ? 'border-ghost-green' : 'border-white/40'
+        dragOver ? 'border-ghost-green' : 'border-ghost-text-muted/30'
       }`}
     >
       <div className="flex items-center gap-3 px-3 py-2">
@@ -800,7 +818,7 @@ function DropZone({ projectId, onFilesAdded }: { projectId: string; onFilesAdded
               <div className="flex-1" />
               <button
                 onClick={handleBrowse}
-                className="px-3 py-1 text-xs font-semibold bg-ghost-surface-light border border-white/80 rounded-md text-white hover:text-ghost-green hover:border-ghost-green transition-colors shrink-0"
+                className="px-3 py-1 text-xs font-semibold bg-ghost-surface-light border border-ghost-text-muted/40 rounded-md text-white hover:text-ghost-green hover:border-ghost-green transition-colors shrink-0"
               >
                 + Add File
               </button>
@@ -892,10 +910,10 @@ export default function PluginLayout() {
   const members = currentProject?.members || [];
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-ghost-bg relative">
+    <div className="flex h-screen w-screen overflow-hidden bg-ghost-surface-light relative">
       {/* Left sidebar: project list + collaborators */}
-      <div className="w-[200px] shrink-0 bg-ghost-surface border-r border-ghost-border flex flex-col">
-        <div className="flex-1 min-h-0">
+      <div className="w-[220px] shrink-0 bg-ghost-surface flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col">
           <ProjectListSidebar
             projects={projects}
             selectedId={selectedProjectId}
@@ -903,36 +921,19 @@ export default function PluginLayout() {
             onCreate={handleCreate}
           />
         </div>
-        <div className="shrink-0 overflow-y-auto" style={{ maxHeight: '45%' }}>
-          <FriendsPanel friends={friends} />
-          <CollaboratorPanel
-            members={members as any}
-            onInvite={() => setShowInvite(!showInvite)}
-            isOwner={members.some((m: any) => m.userId === user?.id && m.role === 'owner')}
-            onRemove={async (userId, name) => {
-              if (!currentProject || !confirm(`Remove ${name} from this project?`)) return;
-              try {
-                await api.removeMember(currentProject.id, userId);
-                fetchProject(currentProject.id);
-              } catch (err: any) {
-                alert(err.message || 'Failed to remove member');
-              }
-            }}
-          />
-        </div>
       </div>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header bar */}
-        <div className="h-12 bg-ghost-surface border-b border-ghost-border flex items-center px-4 gap-4 shrink-0">
+        <div className="h-14 bg-ghost-surface shadow-[0_1px_0_rgba(0,0,0,0.4)] flex items-center px-5 gap-6 shrink-0">
           {currentProject ? (
             <>
               {/* Project name */}
               {editingField === 'name' ? (
                 <input
                   autoFocus
-                  className="text-[13px] font-bold text-white bg-ghost-bg border border-ghost-green/60 rounded px-2 py-1 outline-none focus:border-ghost-green w-44"
+                  className="text-lg font-bold text-white bg-ghost-bg border border-ghost-green/60 rounded-lg px-3 py-1.5 outline-none focus:border-ghost-green w-52"
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
                   onBlur={() => {
@@ -948,31 +949,31 @@ export default function PluginLayout() {
                 />
               ) : (
                 <h2
-                  className="group flex items-center gap-1.5 text-[13px] font-bold text-white truncate cursor-pointer hover:text-ghost-green transition-colors"
+                  className="group flex items-center gap-2 text-lg font-bold text-white truncate cursor-pointer hover:text-ghost-green transition-colors"
                   onClick={() => { setEditingField('name'); setEditValue(currentProject.name); }}
                 >
                   {currentProject.name}
-                  <svg className="w-2.5 h-2.5 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
                 </h2>
               )}
 
               {/* Divider */}
-              <div className="w-px h-5 bg-ghost-border/40 shrink-0" />
+              <div className="w-px h-6 bg-ghost-border shrink-0" />
 
               {/* BPM readout */}
               <div
-                className="flex items-center gap-1.5 cursor-pointer group shrink-0"
+                className="flex items-center gap-2 cursor-pointer group shrink-0"
                 onClick={() => { if (editingField !== 'tempo') { setEditingField('tempo'); setEditValue(String(currentProject.tempo || 120)); } }}
               >
-                <span className="text-[10px] font-semibold text-ghost-text-muted uppercase tracking-wider">BPM</span>
+                <span className="text-[11px] font-semibold text-ghost-text-muted uppercase tracking-wider">BPM</span>
                 {editingField === 'tempo' ? (
                   <input
                     autoFocus
                     type="number"
-                    className="text-[13px] font-bold text-ghost-green bg-ghost-bg border border-ghost-green/50 rounded px-1.5 py-0.5 outline-none w-12 text-center"
-                    style={{ fontFamily: "'JetBrains Mono', 'SF Mono', monospace" }}
+                    className="text-base font-bold text-ghost-green bg-ghost-bg border border-ghost-green/50 rounded-lg px-2 py-1 outline-none w-14 text-center"
+                    style={{ fontFamily: "'Consolas', monospace" }}
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={() => {
@@ -989,8 +990,8 @@ export default function PluginLayout() {
                   />
                 ) : (
                   <span
-                    className="text-[13px] font-bold text-white group-hover:text-ghost-green transition-colors"
-                    style={{ fontFamily: "'JetBrains Mono', 'SF Mono', monospace" }}
+                    className="text-base font-bold text-white group-hover:text-ghost-green transition-colors"
+                    style={{ fontFamily: "'Consolas', monospace" }}
                   >
                     {currentProject.tempo || 120}
                   </span>
@@ -998,19 +999,19 @@ export default function PluginLayout() {
               </div>
 
               {/* Divider */}
-              <div className="w-px h-5 bg-ghost-border/40 shrink-0" />
+              <div className="w-px h-6 bg-ghost-border shrink-0" />
 
               {/* Key readout */}
               <div
-                className="flex items-center gap-1.5 cursor-pointer group shrink-0"
+                className="flex items-center gap-2 cursor-pointer group shrink-0"
                 onClick={() => { if (editingField !== 'key') { setEditingField('key'); setEditValue(currentProject.key || 'C'); } }}
               >
-                <span className="text-[10px] font-semibold text-ghost-text-muted uppercase tracking-wider">KEY</span>
+                <span className="text-[11px] font-semibold text-ghost-text-muted uppercase tracking-wider">KEY</span>
                 {editingField === 'key' ? (
                   <select
                     autoFocus
-                    className="text-[13px] font-bold text-ghost-green bg-ghost-bg border border-ghost-green/50 rounded px-1 py-0.5 outline-none"
-                    style={{ fontFamily: "'JetBrains Mono', 'SF Mono', monospace" }}
+                    className="text-base font-bold text-ghost-green bg-ghost-bg border border-ghost-green/50 rounded-lg px-2 py-1 outline-none"
+                    style={{ fontFamily: "'Consolas', monospace" }}
                     value={editValue}
                     onChange={(e) => {
                       setEditValue(e.target.value);
@@ -1029,8 +1030,8 @@ export default function PluginLayout() {
                   </select>
                 ) : (
                   <span
-                    className="text-[13px] font-bold text-white group-hover:text-ghost-green transition-colors"
-                    style={{ fontFamily: "'JetBrains Mono', 'SF Mono', monospace" }}
+                    className="text-base font-bold text-white group-hover:text-ghost-green transition-colors"
+                    style={{ fontFamily: "'Consolas', monospace" }}
                   >
                     {currentProject.key || 'C'}
                   </span>
@@ -1038,18 +1039,18 @@ export default function PluginLayout() {
               </div>
 
               {/* Divider */}
-              <div className="w-px h-5 bg-ghost-border/40 shrink-0" />
+              <div className="w-px h-6 bg-ghost-border shrink-0" />
 
               {/* Genre readout */}
               <div
-                className="flex items-center gap-1.5 cursor-pointer group shrink-0"
+                className="flex items-center gap-2 cursor-pointer group shrink-0"
                 onClick={() => { if (editingField !== 'genre') { setEditingField('genre'); setEditValue((currentProject as any).genre || ''); } }}
               >
-                <span className="text-[10px] font-semibold text-ghost-text-muted uppercase tracking-wider">GENRE</span>
+                <span className="text-[11px] font-semibold text-ghost-text-muted uppercase tracking-wider">GENRE</span>
                 {editingField === 'genre' ? (
                   <input
                     autoFocus
-                    className="text-[13px] font-bold text-ghost-green bg-ghost-bg border border-ghost-green/50 rounded px-1.5 py-0.5 outline-none w-24"
+                    className="text-base font-bold text-ghost-green bg-ghost-bg border border-ghost-green/50 rounded-lg px-2 py-1 outline-none w-28"
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={() => {
@@ -1066,7 +1067,7 @@ export default function PluginLayout() {
                   />
                 ) : (
                   <span
-                    className="text-[13px] font-bold text-white group-hover:text-ghost-green transition-colors"
+                    className="text-base font-bold text-white group-hover:text-ghost-green transition-colors uppercase"
                   >
                     {(currentProject as any).genre || '—'}
                   </span>
@@ -1125,6 +1126,49 @@ export default function PluginLayout() {
             <>
               <div className="flex-1 flex flex-col min-w-0">
               <div className="flex-1 overflow-y-auto px-3 pt-3 pb-0">
+                {/* Collaborators bar */}
+                <div className="mb-3">
+                <div className="flex items-center gap-4 bg-ghost-surface/80 rounded-xl px-4 py-2.5">
+                  <div className="flex items-center -space-x-2.5">
+                    {[...members].sort((a: any, b: any) => (a.role === 'owner' ? -1 : b.role === 'owner' ? 1 : 0)).map((m: any) => (
+                      <div key={m.userId} className="relative group cursor-pointer transition-transform hover:scale-110 hover:z-10" title={m.displayName}>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[12px] font-bold shadow-lg ${
+                          m.role === 'owner' ? 'bg-ghost-host-gold text-black' : 'bg-ghost-green text-black'
+                        }`} style={{ border: '3px solid #0F0F18' }}>
+                          {m.displayName?.charAt(0)?.toUpperCase() || '?'}
+                        </div>
+                        <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-ghost-online-green" style={{ border: '2.5px solid #0F0F18' }} />
+                      </div>
+                    ))}
+                    <div
+                      onClick={() => setShowInvite(!showInvite)}
+                      className="w-9 h-9 rounded-full bg-ghost-surface-hover flex items-center justify-center text-ghost-text-muted hover:text-white hover:bg-ghost-purple cursor-pointer transition-all"
+                      style={{ border: '3px solid #0F0F18' }}
+                      title="Invite collaborator"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {[...members].sort((a: any, b: any) => (a.role === 'owner' ? -1 : b.role === 'owner' ? 1 : 0)).map((m: any, i: number) => (
+                        <span key={m.userId} className="flex items-center gap-1">
+                          <span className={`text-[13px] ${m.role === 'owner' ? 'font-bold text-ghost-host-gold' : 'font-medium text-ghost-text-primary'}`}>{m.displayName}</span>
+                          {m.role === 'owner' && <span className="text-[9px] font-bold uppercase tracking-wider text-ghost-host-gold/70 bg-ghost-host-gold/10 px-1.5 py-px rounded">host</span>}
+                          {i < members.length - 1 && <span className="text-ghost-text-muted/40 mx-0.5">/</span>}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-ghost-online-green animate-pulse" />
+                      <span className="text-[11px] text-ghost-text-muted">{members.length} collaborator{members.length !== 1 ? 's' : ''} online</span>
+                    </div>
+                  </div>
+                </div>
+                </div>
+
                 {/* Full Mix drop zone */}
                 <FullMixDropZone projectId={selectedProjectId!} onFilesAdded={() => fetchProject(selectedProjectId!)} />
 
@@ -1166,12 +1210,11 @@ export default function PluginLayout() {
                 </div>
               </div>
 
-              {/* Transport bar */}
-              <TransportBar />
               </div>
 
-              {/* Right chat panel */}
-              <div className="w-56 shrink-0 border-l border-ghost-border flex flex-col min-h-0 overflow-hidden">
+              {/* Right panel: friends + chat */}
+              <div className="w-60 shrink-0 border-l border-ghost-border flex flex-col min-h-0 overflow-hidden">
+                <FriendsPanel friends={friends} />
                 <ChatPanel />
               </div>
             </>

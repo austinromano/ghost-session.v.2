@@ -4,28 +4,31 @@
 
 @layer base {
   body {
-    @apply bg-ghost-bg text-ghost-text-primary font-sans;
+    @apply bg-ghost-surface-light text-ghost-text-primary font-sans antialiased;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
   }
 
-  /* Dark scrollbars */
+  /* Discord-style thin scrollbars */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
   }
   ::-webkit-scrollbar-track {
-    background: transparent;
+    background: #0A0A0F;
+    border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-ghost-border rounded-full;
+    background: #161624;
+    border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-ghost-text-muted;
+    background: #1E1E30;
   }
 
   /* Selection */
   ::selection {
-    @apply bg-ghost-green/20 text-ghost-green;
+    @apply bg-ghost-purple/30 text-white;
   }
 }
 
@@ -42,18 +45,18 @@
 input[type="range"].track-volume {
   -webkit-appearance: none;
   appearance: none;
-  height: 3px;
-  background: #2A2A4A;
+  height: 4px;
+  background: #0A0A0F;
   border-radius: 2px;
   outline: none;
 }
 input[type="range"].track-volume::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: #EEEEF5;
+  background: #F2F3F5;
   cursor: pointer;
 }
 input[type="range"].track-volume::-webkit-slider-thumb:hover {
@@ -62,12 +65,12 @@ input[type="range"].track-volume::-webkit-slider-thumb:hover {
 
 @layer components {
   .ghost-card {
-    @apply bg-ghost-surface border border-ghost-border rounded-lg;
+    @apply bg-ghost-surface rounded-lg;
   }
   .ghost-input {
-    @apply bg-ghost-surface-light border border-ghost-border rounded-md px-3 py-2
-           text-ghost-text-primary placeholder:text-ghost-text-muted
-           focus:outline-none focus:border-ghost-green/50 focus:ring-1 focus:ring-ghost-green/20
+    @apply bg-ghost-bg border-none rounded-lg px-3 py-2.5
+           text-ghost-text-primary placeholder:text-ghost-text-muted text-sm
+           focus:outline-none focus:ring-2 focus:ring-ghost-purple/40
            transition-colors;
   }
 }

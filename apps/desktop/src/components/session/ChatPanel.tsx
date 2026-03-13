@@ -26,9 +26,11 @@ function peerKey(userId: string, streamType: StreamType): string {
 }
 
 export default function ChatPanel() {
-  const { chatMessages, sendMessage, onlineUsers, currentProjectId } = useSessionStore();
+  const { chatMessages, sendMessage, deleteMessage, onlineUsers, currentProjectId } = useSessionStore();
   const userId = useAuthStore((s) => s.user?.id);
   const [text, setText] = useState('');
+  const [showEmoji, setShowEmoji] = useState(false);
+  const emojiRef = useRef<HTMLDivElement>(null);
 
   // Camera state
   const [videoOn, setVideoOn] = useState(false);
@@ -49,6 +51,18 @@ export default function ChatPanel() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages.length]);
+
+  // Close emoji picker on outside click
+  useEffect(() => {
+    if (!showEmoji) return;
+    const handler = (e: MouseEvent) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setShowEmoji(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showEmoji]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -328,19 +342,19 @@ export default function ChatPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-3 py-2 border-b border-ghost-border flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-ghost-text-secondary uppercase tracking-wider">Chat</h3>
+      <div className="px-3 py-2.5 shadow-[0_1px_0_rgba(0,0,0,0.3)] flex items-center justify-between shrink-0">
+        <h3 className="text-[11px] font-semibold text-ghost-text-muted uppercase tracking-wider">Chat</h3>
         <div className="flex items-center gap-1.5">
           {/* Screen Share button */}
           <button
             onClick={screenOn ? stopScreenShare : startScreenShare}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
               screenOn
-                ? 'text-red-400 bg-red-400/10 border border-red-400/30 hover:bg-red-400/20'
-                : 'text-blue-400 bg-blue-400/10 border border-blue-400/30 hover:bg-blue-400/20'
+                ? 'text-white bg-red-500 hover:bg-red-600'
+                : 'text-ghost-text-primary bg-ghost-surface-hover hover:bg-ghost-purple hover:text-white'
             }`}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
               <line x1="8" y1="21" x2="16" y2="21" />
               <line x1="12" y1="17" x2="12" y2="21" />
@@ -350,13 +364,13 @@ export default function ChatPanel() {
           {/* Video button */}
           <button
             onClick={videoOn ? stopVideo : startVideo}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
               videoOn
-                ? 'text-red-400 bg-red-400/10 border border-red-400/30 hover:bg-red-400/20'
-                : 'text-ghost-green bg-ghost-green/10 border border-ghost-green/30 hover:bg-ghost-green/20'
+                ? 'text-white bg-red-500 hover:bg-red-600'
+                : 'text-ghost-text-primary bg-ghost-surface-hover hover:bg-ghost-green hover:text-black'
             }`}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               {videoOn ? (
                 <>
                   <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" />
@@ -438,34 +452,94 @@ export default function ChatPanel() {
       )}
 
       {/* Chat messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
-        {chatMessages.map((msg, i) => (
-          <div key={i}>
-            <span className="text-xs font-bold" style={{ color: msg.colour }}>
-              {msg.displayName}
-            </span>
-            <p className="text-sm text-ghost-text-primary">{msg.text}</p>
+      <div className="flex-1 overflow-y-auto px-3 pt-3 pb-1 space-y-3">
+        {chatMessages.length === 0 && (
+          <p className="text-[12px] text-ghost-text-muted text-center py-6 italic">No messages yet</p>
+        )}
+        {chatMessages.map((msg, i) => {
+          const d = new Date(msg.timestamp);
+          const now = new Date();
+          const isToday = d.toDateString() === now.toDateString();
+          const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+          const isYesterday = d.toDateString() === yesterday.toDateString();
+          const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+          const dateLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+          return (
+          <div key={i} className="group hover:bg-ghost-surface-hover/30 -mx-1 px-1 py-1 rounded transition-colors relative">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[13px] font-semibold" style={{ color: msg.colour }}>
+                {msg.displayName}
+              </span>
+              <span className="text-[10px] text-ghost-text-muted font-mono opacity-60 group-hover:opacity-100 transition-opacity">{dateLabel} at {time}</span>
+            </div>
+            <p className="text-[13px] text-ghost-text-secondary leading-snug">{msg.text}</p>
+            {msg.userId === userId && (
+              <button
+                onClick={() => deleteMessage(i)}
+                className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-ghost-text-muted hover:text-ghost-error-red hover:bg-ghost-surface transition-all"
+                title="Delete message"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+              </button>
+            )}
           </div>
-        ))}
+        );
+        })}
         <div ref={bottomRef} />
       </div>
 
-      {/* Chat input */}
-      <div className="p-2 border-t border-ghost-border">
-        <div className="relative">
+      {/* Chat input — Discord style */}
+      <div className="px-2 pb-4 pt-0 -mt-1 relative">
+        {/* Emoji picker */}
+        {showEmoji && (
+          <div
+            ref={emojiRef}
+            className="absolute bottom-14 right-2 w-[220px] bg-[#050508] border border-ghost-border rounded-xl shadow-xl p-2 z-50"
+          >
+            <div className="text-[10px] font-semibold text-ghost-text-muted uppercase tracking-wider px-1 pb-1.5">Smileys</div>
+            <div className="grid grid-cols-7 gap-0.5">
+              {['😀','😂','😍','🥳','😎','🤩','🥰','😭','🔥','💀','👀','💯','🎵','🎶','🎤','🎧','🎸','🥁','🎹','👻','✨'].map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => { setText((prev) => prev + emoji); setShowEmoji(false); }}
+                  className="w-7 h-7 flex items-center justify-center text-base hover:bg-ghost-surface-hover rounded transition-colors"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <div className="text-[10px] font-semibold text-ghost-text-muted uppercase tracking-wider px-1 pt-2 pb-1.5">Hands</div>
+            <div className="grid grid-cols-7 gap-0.5">
+              {['👍','👎','👏','🙌','🤝','✌️','🤟','🤙','💪','🫶','👊','✊','🫡','🎉'].map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => { setText((prev) => prev + emoji); setShowEmoji(false); }}
+                  className="w-7 h-7 flex items-center justify-center text-base hover:bg-ghost-surface-hover rounded transition-colors"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="flex items-center bg-ghost-surface-hover rounded-lg">
           <input
-            className="ghost-input w-full text-sm pr-8"
+            className="flex-1 min-w-0 bg-transparent text-[13px] text-ghost-text-primary placeholder:text-ghost-text-muted pl-3 py-2.5 pr-2 outline-none"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Type a message..."
+            placeholder="Message..."
           />
+          {/* Emoji button */}
           <button
-            onClick={handleSend}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-ghost-text-muted hover:text-ghost-green transition-colors"
+            onClick={() => setShowEmoji((v) => !v)}
+            className={`shrink-0 w-8 h-8 flex items-center justify-center transition-colors rounded ${showEmoji ? 'text-ghost-green' : 'text-ghost-text-muted hover:text-ghost-text-primary'}`}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-4-9a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0zm5 0a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0zm-5.5 3.5a.75.75 0 0 1 1.06.02A4.47 4.47 0 0 0 12 16a4.47 4.47 0 0 0 3.44-1.48.75.75 0 1 1 1.08 1.04A5.97 5.97 0 0 1 12 17.5a5.97 5.97 0 0 1-4.52-1.94.75.75 0 0 1 .02-1.06z" />
             </svg>
           </button>
         </div>

@@ -20,6 +20,7 @@ interface SessionState {
   leave: () => void;
   sendAction: (action: any) => void;
   sendMessage: (text: string) => void;
+  deleteMessage: (index: number) => void;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -77,5 +78,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   sendMessage: (text) => {
     const { currentProjectId } = get();
     if (currentProjectId) sendChat(currentProjectId, text);
+  },
+
+  deleteMessage: (index) => {
+    set((s) => ({ chatMessages: s.chatMessages.filter((_, i) => i !== index) }));
   },
 }));
