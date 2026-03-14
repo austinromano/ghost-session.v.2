@@ -2,9 +2,10 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { HTTPException } from 'hono/http-exception';
 import { db } from '../db/index.js';
-import { versions, projectMembers, users, files, tracks } from '../db/schema.js';
+import { versions, projectMembers, users, files, tracks, projects } from '../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { authMiddleware, type AuthUser } from '../middleware/auth.js';
+import { createAutoSnapshot } from '../lib/autoSnapshot.js';
 
 const versionRoutes = new Hono();
 versionRoutes.use('*', authMiddleware);
@@ -25,6 +26,7 @@ versionRoutes.get('/', async (c) => {
     createdBy: versions.createdBy,
     createdByName: users.displayName,
     fileManifestJson: versions.fileManifestJson,
+    snapshotJson: versions.snapshotJson,
     createdAt: versions.createdAt,
   }).from(versions)
     .innerJoin(users, eq(versions.createdBy, users.id))
@@ -85,6 +87,73 @@ versionRoutes.get('/:versionId', async (c) => {
 
   if (result.length === 0) throw new HTTPException(404, { message: 'Version not found' });
   return c.json({ success: true, data: result[0] });
+});
+
+// Revert project to a specific version's snapshot
+versionRoutes.post('/:versionId/revert', async (c) => {
+  const user = c.get('user') as AuthUser;
+  const projectId = c.req.param('id');
+  const versionId = c.req.param('versionId');
+
+  // Check edit permission
+  const membership = db.select().from(projectMembers)
+    .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, user.id)))
+    .limit(1).all();
+  if (membership.length === 0 || membership[0].role === 'viewer') {
+    throw new HTTPException(403, { message: 'No edit permission' });
+  }
+
+  // Get the version with snapshot
+  const [version] = db.select().from(versions).where(eq(versions.id, versionId)).limit(1).all();
+  if (!version) throw new HTTPException(404, { message: 'Version not found' });
+
+  const snapshot = version.snapshotJson as any;
+  if (!snapshot || !snapshot.tracks) {
+    throw new HTTPException(400, { message: 'This version has no snapshot to revert to' });
+  }
+
+  // Save a snapshot of current state before reverting
+  createAutoSnapshot(projectId, user.id, `Before revert to V${version.versionNumber}`);
+
+  // Restore project settings
+  db.update(projects).set({
+    name: snapshot.name,
+    description: snapshot.description,
+    tempo: snapshot.tempo,
+    key: snapshot.key,
+    genre: snapshot.genre,
+    timeSignature: snapshot.timeSignature,
+    updatedAt: new Date().toISOString(),
+  }).where(eq(projects.id, projectId)).run();
+
+  // Delete all current tracks
+  db.delete(tracks).where(eq(tracks.projectId, projectId)).run();
+
+  // Restore tracks from snapshot
+  for (const t of snapshot.tracks) {
+    db.insert(tracks).values({
+      id: t.id,
+      projectId,
+      name: t.name,
+      type: t.type,
+      ownerId: t.ownerId,
+      fileId: t.fileId,
+      fileName: t.fileName,
+      volume: t.volume,
+      pan: t.pan,
+      muted: t.muted,
+      soloed: t.soloed,
+      bpm: t.bpm,
+      key: t.key,
+      position: t.position,
+      createdAt: new Date().toISOString(),
+    }).run();
+  }
+
+  // Create a new snapshot marking the revert
+  createAutoSnapshot(projectId, user.id, `Reverted to V${version.versionNumber}`);
+
+  return c.json({ success: true, message: `Reverted to version ${version.versionNumber}` });
 });
 
 export default versionRoutes;

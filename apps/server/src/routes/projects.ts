@@ -5,6 +5,7 @@ import { db } from '../db/index.js';
 import { projects, projectMembers, tracks, users, invitations } from '../db/schema.js';
 import { eq, or, and, desc, like } from 'drizzle-orm';
 import { authMiddleware, type AuthUser } from '../middleware/auth.js';
+import { createAutoSnapshot } from '../lib/autoSnapshot.js';
 
 const projectRoutes = new Hono();
 projectRoutes.use('*', authMiddleware);
@@ -118,6 +119,10 @@ projectRoutes.patch('/:id', async (c) => {
     .where(eq(projects.id, projectId)).run();
 
   const [updated] = db.select().from(projects).where(eq(projects.id, projectId)).all();
+
+  const changes = Object.keys(body).join(', ');
+  createAutoSnapshot(projectId, user.id, `Updated project: ${changes}`);
+
   return c.json({ success: true, data: updated });
 });
 

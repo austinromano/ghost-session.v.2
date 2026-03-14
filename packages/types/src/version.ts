@@ -7,6 +7,7 @@ export interface Version {
   createdBy: string;
   createdByName: string;
   fileManifest: FileManifestEntry[];
+  snapshot: ProjectSnapshot | null;
   createdAt: string;
 }
 
@@ -16,4 +17,30 @@ export interface FileManifestEntry {
   trackId: string | null;
   trackName: string | null;
   fileSize: number;
+}
+
+export interface TrackSnapshot {
+  id: string;
+  name: string;
+  type: string;
+  ownerId: string;
+  fileId: string | null;
+  fileName: string | null;
+  volume: number;
+  pan: number;
+  muted: boolean;
+  soloed: boolean;
+  bpm: number | null;
+  key: string | null;
+  position: number;
+}
+
+export interface ProjectSnapshot {
+  name: string;
+  description: string;
+  tempo: number;
+  key: string;
+  genre: string;
+  timeSignature: string;
+  tracks: TrackSnapshot[];
 }

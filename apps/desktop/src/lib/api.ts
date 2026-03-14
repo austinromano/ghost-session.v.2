@@ -59,6 +59,8 @@ export const api = {
   listVersions: (projectId: string) => request<Version[]>('GET', `/projects/${projectId}/versions`),
   createVersion: (projectId: string, data: CreateVersionRequest) =>
     request<Version>('POST', `/projects/${projectId}/versions`, data),
+  revertToVersion: (projectId: string, versionId: string) =>
+    request<{ message: string }>('POST', `/projects/${projectId}/versions/${versionId}/revert`),
 
   // Comments
   listComments: (projectId: string) => request<Comment[]>('GET', `/projects/${projectId}/comments`),

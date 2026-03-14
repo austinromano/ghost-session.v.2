@@ -5,6 +5,7 @@ import { db } from '../db/index.js';
 import { tracks, projectMembers } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { authMiddleware, type AuthUser } from '../middleware/auth.js';
+import { createAutoSnapshot } from '../lib/autoSnapshot.js';
 
 const trackRoutes = new Hono();
 trackRoutes.use('*', authMiddleware);
@@ -57,6 +58,9 @@ trackRoutes.post('/', async (c) => {
   }).run();
 
   const [track] = db.select().from(tracks).where(eq(tracks.id, id)).all();
+
+  createAutoSnapshot(projectId, user.id, `Added track: ${body.name}`);
+
   return c.json({ success: true, data: track }, 201);
 });
 
@@ -80,6 +84,8 @@ trackRoutes.patch('/:trackId', async (c) => {
     .where(and(eq(tracks.id, trackId), eq(tracks.projectId, projectId))).all();
   if (!updated) throw new HTTPException(404, { message: 'Track not found' });
 
+  createAutoSnapshot(projectId, user.id, `Updated track: ${updated.name}`);
+
   return c.json({ success: true, data: updated });
 });
 
@@ -101,7 +107,11 @@ trackRoutes.delete('/:trackId', async (c) => {
     }
   }
 
+  const deletedName = track.name;
   db.delete(tracks).where(eq(tracks.id, trackId)).run();
+
+  createAutoSnapshot(projectId, user.id, `Deleted track: ${deletedName}`);
+
   return c.json({ success: true });
 });
 

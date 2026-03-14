@@ -689,13 +689,29 @@ function FullMixDropZone({ projectId, onFilesAdded }: { projectId: string; onFil
   );
 }
 
+function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+}
+
 function StemRow({
-  name, type, onDelete, onRename, fileId, projectId, trackId,
+  name, type, onDelete, onRename, fileId, projectId, trackId, createdAt,
 }: {
   name: string; type: string;
   onDelete: () => void;
   onRename: (newName: string) => void;
   fileId?: string | null; projectId?: string; trackId: string;
+  createdAt?: string | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(name);
@@ -815,6 +831,11 @@ function StemRow({
           </p>
         )}
         <p className="text-[10px] text-ghost-text-muted uppercase mt-0.5">{type === 'audio' ? 'stem' : type === 'fullmix' ? 'mix' : type}</p>
+        {createdAt && (
+          <p className="text-[11px] text-ghost-green font-medium mt-0.5" title={new Date(createdAt).toLocaleString()}>
+            {formatDate(createdAt)}
+          </p>
+        )}
       </div>
 
       {/* Waveform */}
@@ -1246,7 +1267,7 @@ function DropZone({ projectId, onFilesAdded }: { projectId: string; onFilesAdded
 
 export default function PluginLayout() {
   const { user, logout } = useAuthStore();
-  const { projects, currentProject, fetchProjects, fetchProject, createProject, updateProject, addTrack, updateTrack, deleteTrack } = useProjectStore();
+  const { projects, currentProject, fetchProjects, fetchProject, createProject, updateProject, addTrack, updateTrack, deleteTrack, versions, fetchVersions } = useProjectStore();
   const { join, leave } = useSessionStore();
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -1266,6 +1287,8 @@ export default function PluginLayout() {
   const [editingField, setEditingField] = useState<'name' | 'tempo' | 'key' | 'genre' | null>(null);
   const [editValue, setEditValue] = useState('');
   const [showProjectMenu, setShowProjectMenu] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [reverting, setReverting] = useState(false);
   const projectMenuRef = useRef<HTMLDivElement>(null);
 
   const fetchSamplePacks = async () => {
@@ -1318,7 +1341,22 @@ export default function PluginLayout() {
     setSelectedProjectId(id);
     setSelectedPackId(null);
     fetchProject(id);
+    fetchVersions(id);
     join(id);
+  };
+
+  const handleRevert = async (versionId: string) => {
+    if (!selectedProjectId || reverting) return;
+    setReverting(true);
+    try {
+      await api.revertToVersion(selectedProjectId, versionId);
+      await fetchProject(selectedProjectId);
+      await fetchVersions(selectedProjectId);
+    } catch (err: any) {
+      console.error('Revert failed:', err);
+    } finally {
+      setReverting(false);
+    }
   };
 
   // Close project menu on click outside
@@ -1599,6 +1637,20 @@ export default function PluginLayout() {
                     <div className="w-px h-4 bg-ghost-border" />
                     <span className="text-[11px] text-ghost-text-muted uppercase tracking-wider font-semibold">Key</span>
                     <span className="text-[13px] font-bold text-white" style={{ fontFamily: "'Consolas', monospace" }}>{currentProject.key || 'C'}</span>
+                    {currentProject.updatedAt && (
+                      <>
+                        <div className="w-px h-4 bg-ghost-border" />
+                        <span className="text-[11px] text-ghost-text-muted flex items-center gap-1.5">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-60">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                          </svg>
+                          <span className="text-ghost-green font-medium">
+                            {new Date(currentProject.updatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                          </span>
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -1634,6 +1686,24 @@ export default function PluginLayout() {
                   </div>
 
                   <button
+                    onClick={() => { setShowVersionHistory(!showVersionHistory); if (!showVersionHistory && selectedProjectId) fetchVersions(selectedProjectId); }}
+                    className={`shrink-0 px-3 py-1.5 text-[12px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
+                      showVersionHistory
+                        ? 'bg-ghost-purple text-white'
+                        : 'bg-ghost-surface-light border border-ghost-border text-ghost-text-secondary hover:text-white'
+                    }`}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    History
+                    {versions.length > 0 && (
+                      <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded-full">{versions.length}</span>
+                    )}
+                  </button>
+
+                  <button
                     onClick={() => setShowInvite(!showInvite)}
                     className="shrink-0 px-4 py-1.5 text-[13px] font-bold bg-ghost-green text-black rounded-lg hover:bg-ghost-green/85 transition-colors shadow-[0_0_12px_rgba(0,255,200,0.25)]"
                   >
@@ -1642,6 +1712,56 @@ export default function PluginLayout() {
 
                 </div>
                 </div>
+
+                {/* Version History panel */}
+                {showVersionHistory && (
+                  <div className="mb-3 bg-ghost-surface/80 rounded-xl overflow-hidden border border-ghost-border/50">
+                    <div className="px-4 py-2 border-b border-ghost-border/30 flex items-center justify-between">
+                      <span className="text-[12px] font-bold text-ghost-text-secondary uppercase tracking-wider">Version History</span>
+                      <span className="text-[10px] text-ghost-text-muted">{versions.length} snapshot{versions.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {versions.length === 0 ? (
+                        <div className="px-4 py-4 text-center text-[12px] text-ghost-text-muted italic">
+                          No snapshots yet — changes will be saved automatically
+                        </div>
+                      ) : (
+                        versions.map((v: any) => (
+                          <div key={v.id} className="flex items-center gap-3 px-4 py-2 border-b border-ghost-border/20 hover:bg-ghost-surface-light/30 transition-colors group">
+                            {/* Version dot */}
+                            <div className="w-2.5 h-2.5 rounded-full border-2 border-ghost-purple bg-ghost-bg shrink-0" />
+
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[12px] text-ghost-text-primary font-medium truncate">{v.name}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] text-ghost-text-muted">{v.createdByName || 'Unknown'}</span>
+                                <span className="text-[10px] text-ghost-green font-medium">
+                                  {new Date(v.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Version number */}
+                            <span className="text-[10px] font-mono text-ghost-purple bg-ghost-purple/10 px-2 py-0.5 rounded shrink-0">
+                              V{v.versionNumber}
+                            </span>
+
+                            {/* Revert button */}
+                            {(v.snapshotJson || v.snapshot) && (
+                              <button
+                                onClick={() => handleRevert(v.id)}
+                                disabled={reverting}
+                                className="opacity-0 group-hover:opacity-100 text-[10px] font-semibold px-2 py-1 bg-ghost-surface-light border border-ghost-border rounded text-ghost-text-secondary hover:text-white hover:border-ghost-purple transition-all shrink-0"
+                              >
+                                {reverting ? '...' : 'Revert'}
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Full Mix drop zone */}
                 <FullMixDropZone projectId={selectedProjectId!} onFilesAdded={() => fetchProject(selectedProjectId!)} />
@@ -1656,6 +1776,7 @@ export default function PluginLayout() {
                       type="fullmix"
                       fileId={t.fileId}
                       projectId={selectedProjectId!}
+                      createdAt={t.createdAt}
                       onDelete={() => deleteTrack(selectedProjectId!, t.id)}
                       onRename={(newName) => updateTrack(selectedProjectId!, t.id, { name: newName })}
                     />
@@ -1677,6 +1798,7 @@ export default function PluginLayout() {
                       type={t.type || 'audio'}
                       fileId={t.fileId}
                       projectId={selectedProjectId!}
+                      createdAt={t.createdAt}
                       onDelete={() => deleteTrack(selectedProjectId!, t.id)}
                       onRename={(newName) => updateTrack(selectedProjectId!, t.id, { name: newName })}
                     />

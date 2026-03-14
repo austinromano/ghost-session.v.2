@@ -138,6 +138,7 @@ export function initDatabase() {
   `);
   // Migrations for existing databases
   try { sqlite.exec(`ALTER TABLE projects ADD COLUMN genre TEXT DEFAULT ''`); } catch {}
+  try { sqlite.exec(`ALTER TABLE versions ADD COLUMN snapshot_json TEXT`); } catch {}
 
   console.log('  Database initialized (SQLite)');
 }

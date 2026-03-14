@@ -67,6 +67,7 @@ export const versions = sqliteTable('versions', {
   description: text('description').default(''),
   createdBy: text('created_by').notNull().references(() => users.id),
   fileManifestJson: text('file_manifest_json', { mode: 'json' }).default([]),
+  snapshotJson: text('snapshot_json', { mode: 'json' }),
   createdAt: timestamp('created_at').notNull(),
 });
 
