@@ -123,25 +123,28 @@ auth.get('/avatars/:fileName', async (c) => {
   const ext = fileName.split('.').pop() || 'jpg';
   const mimeMap: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
 
+  // Try local disk first, then R2
+  const { resolve, join } = await import('node:path');
+  const AVATARS_DIR = join(process.cwd(), 'uploads', 'avatars');
+  const filePath = resolve(AVATARS_DIR, fileName);
+  try {
+    const { readFile } = await import('node:fs/promises');
+    const data = await readFile(filePath);
+    return new Response(data, { headers: { 'Content-Type': mimeMap[ext] || 'image/jpeg', 'Cache-Control': 'public, max-age=86400' } });
+  } catch {
+    // Not on local disk, try R2
+  }
+
   if (isR2Configured()) {
     try {
       const { stream, contentType } = await downloadFromR2(`avatars/${fileName}`);
       return new Response(stream, { headers: { 'Content-Type': contentType || mimeMap[ext] || 'image/jpeg', 'Cache-Control': 'public, max-age=86400' } });
     } catch {
-      throw new HTTPException(404, { message: 'Avatar not found' });
-    }
-  } else {
-    const { resolve } = await import('node:path');
-    const AVATARS_DIR = resolve(import.meta.dirname, '../../uploads/avatars');
-    const filePath = resolve(AVATARS_DIR, fileName);
-    try {
-      const { readFile } = await import('node:fs/promises');
-      const data = await readFile(filePath);
-      return new Response(data, { headers: { 'Content-Type': mimeMap[ext] || 'image/jpeg', 'Cache-Control': 'public, max-age=86400' } });
-    } catch {
-      throw new HTTPException(404, { message: 'Avatar not found' });
+      // Not in R2 either
     }
   }
+
+  throw new HTTPException(404, { message: 'Avatar not found' });
 });
 
 auth.delete('/account', authMiddleware, async (c) => {
