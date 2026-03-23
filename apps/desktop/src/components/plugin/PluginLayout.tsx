@@ -885,6 +885,289 @@ function Waveform({
   );
 }
 
+function VideoGrid({ members, userId }: { members: any[]; userId?: string }) {
+  const [cameraOn, setCameraOn] = useState(false);
+  const [micOn, setMicOn] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [showMicMenu, setShowMicMenu] = useState(false);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const animFrameRef = useRef<number>(0);
+  const micMenuRef = useRef<HTMLDivElement>(null);
+
+  // Fetch audio input devices
+  const fetchDevices = async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
+    } catch (err) {
+      console.error('Device enumeration error:', err);
+    }
+  };
+
+  // Set up audio analyser for speaking detection
+  const setupAnalyser = (stream: MediaStream) => {
+    if (audioCtxRef.current) audioCtxRef.current.close();
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.5;
+    source.connect(analyser);
+    analyserRef.current = analyser;
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    const checkLevel = () => {
+      analyser.getByteFrequencyData(dataArray);
+      const avg = dataArray.reduce((sum, v) => sum + v, 0) / dataArray.length;
+      setIsSpeaking(avg > 15);
+      animFrameRef.current = requestAnimationFrame(checkLevel);
+    };
+    checkLevel();
+  };
+
+  const startMic = async (deviceId?: string) => {
+    // Stop existing audio tracks
+    if (streamRef.current) {
+      streamRef.current.getAudioTracks().forEach(t => t.stop());
+    }
+    try {
+      const constraints: MediaStreamConstraints = {
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (streamRef.current) {
+        // Add new audio track to existing stream
+        stream.getAudioTracks().forEach(t => streamRef.current!.addTrack(t));
+      } else {
+        streamRef.current = stream;
+      }
+      setupAnalyser(streamRef.current);
+      setMicOn(true);
+      // Refresh device list after permission granted
+      fetchDevices();
+    } catch (err) {
+      console.error('Mic error:', err);
+    }
+  };
+
+  const toggleCamera = async () => {
+    if (cameraOn) {
+      if (streamRef.current) {
+        streamRef.current.getVideoTracks().forEach(t => t.stop());
+      }
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setCameraOn(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: micOn });
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        setCameraOn(true);
+      } catch (err) {
+        console.error('Camera error:', err);
+      }
+    }
+  };
+
+  const toggleMic = async () => {
+    if (micOn) {
+      if (streamRef.current) {
+        streamRef.current.getAudioTracks().forEach(t => { t.enabled = false; t.stop(); });
+      }
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null; }
+      setIsSpeaking(false);
+      setMicOn(false);
+    } else {
+      await startMic(selectedDeviceId || undefined);
+    }
+  };
+
+  const selectDevice = async (deviceId: string) => {
+    setSelectedDeviceId(deviceId);
+    setShowMicMenu(false);
+    if (micOn) {
+      await startMic(deviceId);
+    }
+  };
+
+  const handleMicClick = async () => {
+    await fetchDevices();
+    setShowMicMenu(!showMicMenu);
+  };
+
+  // Close mic menu on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (micMenuRef.current && !micMenuRef.current.contains(e.target as Node)) {
+        setShowMicMenu(false);
+      }
+    };
+    if (showMicMenu) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showMicMenu]);
+
+  // Attach stream to video element when camera turns on
+  useEffect(() => {
+    if (cameraOn && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [cameraOn]);
+
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (audioCtxRef.current) audioCtxRef.current.close();
+    };
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-1.5 mb-2">
+      {/* Your video — full width */}
+      {(() => {
+        const myIndex = members.findIndex(m => m.userId === userId);
+        const me = myIndex >= 0 ? members[myIndex] : null;
+        if (!me) return null;
+        const i = 0;
+        const member = me;
+        const isMe = true;
+        return (
+          <div className="relative aspect-video rounded-xl overflow-hidden glass-subtle group/video">
+            {isMe && cameraOn && (
+              <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" />
+            )}
+            {!(isMe && cameraOn) && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-1.5">
+                  <div className={`rounded-full transition-all duration-150 ${isSpeaking && micOn ? 'ring-[3px] ring-green-500 shadow-[0_0_12px_rgba(34,197,94,0.5)]' : ''}`}>
+                    <Avatar name={member.displayName || '?'} src={member.avatarUrl} size="xl" />
+                  </div>
+                  <span className="text-[11px] text-white/50 font-medium">{member.displayName}</span>
+                </div>
+              </div>
+            )}
+            {isMe && cameraOn && (
+              <div className={`absolute inset-0 rounded-xl transition-all duration-150 pointer-events-none ${isSpeaking && micOn ? 'ring-[3px] ring-inset ring-green-500 shadow-[inset_0_0_12px_rgba(34,197,94,0.3)]' : ''}`} />
+            )}
+            {isMe && cameraOn && (
+              <span className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[11px] text-white font-medium drop-shadow-lg">{member?.displayName}</span>
+            )}
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
+              <motion.button onClick={toggleCamera} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${cameraOn ? 'bg-purple-600 text-white' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}
+                title={cameraOn ? 'Turn off camera' : 'Turn on camera'}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
+              </motion.button>
+              <div className="relative" ref={micMenuRef}>
+                <div className="flex items-center gap-0.5">
+                  <motion.button onClick={toggleMic} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${micOn ? 'bg-green-600 text-white' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}
+                    title={micOn ? 'Mute mic' : 'Unmute mic'}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+                  </motion.button>
+                  <motion.button onClick={handleMicClick} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    className="w-5 h-8 rounded-full flex items-center justify-center bg-white/10 text-white/50 hover:bg-white/20 transition-colors"
+                    title="Select mic input"
+                  >
+                    <svg width="8" height="8" viewBox="0 0 10 6" fill="currentColor"><polygon points="0,0 10,0 5,6" /></svg>
+                  </motion.button>
+                </div>
+                {showMicMenu && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl overflow-hidden z-50">
+                    <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-ghost-text-muted border-b border-white/5">Input Device</div>
+                    {audioDevices.length === 0 && (
+                      <div className="px-3 py-2 text-[12px] text-ghost-text-muted">No devices found</div>
+                    )}
+                    {audioDevices.map(d => (
+                      <button
+                        key={d.deviceId}
+                        onClick={() => selectDevice(d.deviceId)}
+                        className={`w-full text-left px-3 py-2 text-[12px] hover:bg-white/[0.06] transition-colors flex items-center gap-2 ${
+                          selectedDeviceId === d.deviceId ? 'text-ghost-green' : 'text-ghost-text-secondary'
+                        }`}
+                      >
+                        {selectedDeviceId === d.deviceId && (
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        )}
+                        <span className={selectedDeviceId !== d.deviceId ? 'ml-[18px]' : ''}>{d.label || `Microphone ${d.deviceId.slice(0, 8)}`}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <span className="absolute bottom-1.5 left-2 w-2 h-2 rounded-full bg-ghost-online-green" />
+          </div>
+        );
+      })()}
+      {/* Friend slots — 3 in a row */}
+      <div className="grid grid-cols-3 gap-1.5">
+      {Array.from({ length: 3 }).map((_, i) => {
+        const otherMembers = members.filter(m => m.userId !== userId);
+        const member = otherMembers[i];
+        const isMe = false;
+        return (
+          <div key={i} className="relative aspect-[4/3] rounded-xl overflow-hidden glass-subtle group/video">
+            {isMe && cameraOn && (
+              <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" />
+            )}
+            {!(isMe && cameraOn) && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                {member ? (
+                  <div className="flex flex-col items-center gap-1.5">
+                    <Avatar name={member.displayName || '?'} src={member.avatarUrl} size="lg" />
+                    <span className="text-[11px] text-white/50 font-medium">{member.displayName}</span>
+                  </div>
+                ) : (
+                  <button onClick={() => { const searchInput = document.querySelector('input[placeholder="Search"]') as HTMLInputElement; if (searchInput) { searchInput.focus(); searchInput.scrollIntoView(); } }} className="flex flex-col items-center gap-2 hover:scale-105 transition-all cursor-pointer">
+                    <div className="w-10 h-10 rounded-full bg-purple-600/20 border border-purple-500/30 flex items-center justify-center hover:bg-purple-600/30 transition-colors">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    </div>
+                    <span className="text-[11px] text-purple-400 font-medium">Add Friend</span>
+                  </button>
+                )}
+              </div>
+            )}
+            {isMe && cameraOn && (
+              <span className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[11px] text-white font-medium drop-shadow-lg">{member?.displayName}</span>
+            )}
+            {isMe && (
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
+                <motion.button onClick={toggleCamera} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${cameraOn ? 'bg-purple-600 text-white' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}
+                  title={cameraOn ? 'Turn off camera' : 'Turn on camera'}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
+                </motion.button>
+                <motion.button onClick={toggleMic} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${micOn ? 'bg-green-600 text-white' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}
+                  title={micOn ? 'Mute mic' : 'Unmute mic'}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+                </motion.button>
+              </div>
+            )}
+            {member && <span className="absolute bottom-1.5 left-2 w-2 h-2 rounded-full bg-ghost-online-green" />}
+          </div>
+        );
+      })}
+      </div>
+    </div>
+  );
+}
+
 function FullMixDropZone({ projectId, onFilesAdded, isBeat }: { projectId: string; onFilesAdded: () => void; isBeat?: boolean }) {
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -959,23 +1242,26 @@ function FullMixDropZone({ projectId, onFilesAdded, isBeat }: { projectId: strin
         <div className="absolute inset-0 opacity-[0.15] pointer-events-none">
           <Waveform seed="fullmix-demo-placeholder" height={95} />
         </div>
-        <div className="absolute inset-0 flex items-center gap-3 px-5">
+        <div className="absolute inset-0 flex items-center gap-3 pl-8 pr-5">
           {uploading ? (
             <span className="text-[13px] text-ghost-green animate-pulse">{status}</span>
           ) : status ? (
             <span className="text-[13px] text-ghost-green">{status}</span>
           ) : (
             <>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={dragOver ? '#00FFC8' : '#ffffff'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={dragOver ? '#00FFC8' : '#ffffff'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="17 8 12 3 7 8" />
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
-              <span className={`text-[16px] font-bold ${dragOver ? 'text-ghost-green' : 'text-white'}`}>Drag audio files here</span>
+              <span className={`text-[13px] font-bold uppercase tracking-wide ml-2 ${dragOver ? 'text-ghost-green' : 'text-white'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.6), 0 0px 2px rgba(0,0,0,0.4)' }}>Drag audio files here</span>
               <div className="flex-1" />
-              <button
+              <motion.button
                 onClick={handleBrowse}
-                className="flex items-center justify-center gap-1.5 w-[110px] h-10 text-[14px] font-semibold bg-purple-600 border border-purple-500 rounded-lg text-white hover:bg-purple-500 transition-all shrink-0"
+                className="w-[120px] h-11 rounded-full text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(124,58,237,0.4),0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] shrink-0"
+                style={{ background: 'linear-gradient(180deg, #7C3AED 0%, #581C87 100%)' }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -983,7 +1269,7 @@ function FullMixDropZone({ projectId, onFilesAdded, isBeat }: { projectId: strin
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
                 Upload
-              </button>
+              </motion.button>
             </>
           )}
         </div>
@@ -1105,22 +1391,25 @@ function StemRow({
     <div
       draggable={!!fileId}
       onDragStart={handleDragStart}
-      className={`group flex items-center bg-ghost-surface border border-ghost-border rounded-lg overflow-hidden h-[95px] ${fileId ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      className={`group flex items-center rounded-xl overflow-hidden h-[95px] border border-white/[0.06] ${fileId ? 'cursor-grab active:cursor-grabbing' : ''}`}
     >
       {/* Waveform full width with overlay controls */}
-      <div className="flex-1 h-full overflow-hidden bg-ghost-bg relative">
+      <div className="flex-1 h-full overflow-hidden bg-[#0A0412] relative">
         <Waveform seed={name + type} height={95} fileId={fileId} projectId={projectId} showPlayhead trackId={trackId} />
+        {/* Left gradient for text readability */}
+        <div className="absolute inset-y-0 left-0 w-[45%] pointer-events-none" style={{ background: 'linear-gradient(90deg, rgba(10,4,18,0.85) 0%, rgba(10,4,18,0.4) 60%, transparent 100%)' }} />
         {/* Play button overlay */}
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10">
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
           <motion.button
             onClick={handlePlay}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
               isPlaying
-                ? 'bg-purple-600 text-white shadow-[0_0_16px_rgba(124,58,237,0.4)]'
+                ? 'text-white shadow-[0_0_20px_rgba(124,58,237,0.5),0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.2)]'
                 : ready
-                  ? 'bg-purple-600/80 text-white hover:bg-purple-600 hover:shadow-[0_0_16px_rgba(124,58,237,0.3)]'
-                  : 'bg-white/10 text-ghost-text-muted opacity-40'
+                  ? 'text-white shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(124,58,237,0.4),0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.2)]'
+                  : 'bg-white/5 text-ghost-text-muted opacity-40'
             }`}
+            style={{ background: isPlaying || ready ? 'linear-gradient(180deg, #7C3AED 0%, #581C87 100%)' : undefined }}
             disabled={!ready}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
@@ -1136,11 +1425,11 @@ function StemRow({
           </motion.button>
         </div>
         {/* Name overlay */}
-        <div className="absolute left-12 top-1 z-10">
+        <div className="absolute left-16 top-2 z-10 max-w-[50%]">
           {editing ? (
             <input
               autoFocus
-              className="text-xs font-semibold text-white bg-black/50 border border-ghost-green/50 rounded px-1 py-0.5 outline-none focus:border-ghost-green"
+              className="text-[13px] font-semibold text-white bg-black/60 border border-ghost-green/50 rounded px-1.5 py-0.5 outline-none focus:border-ghost-green w-full"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               onBlur={() => {
@@ -1154,54 +1443,63 @@ function StemRow({
             />
           ) : (
             <p
-              className="text-[11px] font-semibold text-white/90 truncate cursor-pointer hover:text-ghost-green transition-colors drop-shadow-md"
+              className="text-[13px] font-bold text-white truncate cursor-pointer hover:text-ghost-green transition-colors"
               onClick={() => { setEditName(name); setEditing(true); }}
-              title="Click to rename"
+              title={name}
             >
               {name}
             </p>
           )}
-          <p className="text-[9px] text-white/50 uppercase">{type === 'audio' ? 'stem' : type === 'fullmix' ? 'mix' : type}</p>
+          <p className="text-[10px] text-white/40 uppercase font-medium mt-0.5">{type === 'audio' ? 'stem' : type === 'fullmix' ? 'mix' : type}</p>
         </div>
         {/* Time overlay */}
         {createdAt && (
-          <div className="absolute left-12 bottom-1 z-10">
-            <p className="text-[10px] text-ghost-green font-medium drop-shadow-md" title={new Date(createdAt).toLocaleString()}>
+          <div className="absolute left-16 bottom-2 z-10">
+            <p className="text-[11px] text-ghost-green font-medium" title={new Date(createdAt).toLocaleString()}>
               {formatDate(createdAt)}
             </p>
           </div>
         )}
         {/* Action buttons overlay */}
         <div className="absolute top-1/2 -translate-y-1/2 z-10 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ right: '20px' }}>
-          <button
+          <motion.button
             onClick={onDelete}
             title="Delete"
-            className="w-9 h-9 rounded-lg bg-purple-600 text-white hover:bg-red-500 transition-all flex items-center justify-center"
+            className="w-11 h-11 rounded-full text-white flex items-center justify-center transition-all shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(124,58,237,0.4),0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.2)]"
+            style={{ background: 'linear-gradient(180deg, #7C3AED 0%, #581C87 100%)' }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6" />
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
             </svg>
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             onClick={handleDownload}
             title="Download"
-            className="w-9 h-9 rounded-lg bg-purple-600 text-white hover:bg-purple-500 transition-all flex items-center justify-center"
+            className="w-11 h-11 rounded-full text-white flex items-center justify-center transition-all shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(124,58,237,0.4),0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.2)]"
+            style={{ background: 'linear-gradient(180deg, #7C3AED 0%, #581C87 100%)' }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             title="Post to Feed"
-            className="w-9 h-9 rounded-lg bg-purple-600 text-white hover:bg-purple-500 transition-all flex items-center justify-center"
+            className="w-11 h-11 rounded-full text-white flex items-center justify-center transition-all shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(124,58,237,0.4),0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.2)]"
+            style={{ background: 'linear-gradient(180deg, #7C3AED 0%, #581C87 100%)' }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 3L3 10l7 3 3 7 8-17z" />
             </svg>
-          </button>
+          </motion.button>
         </div>
       </div>
     </div>
@@ -1214,75 +1512,154 @@ function formatTime(seconds: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function TransportBar() {
-  const { isPlaying, currentTime, duration, play, pause, stop, seekTo } = useAudioStore();
+function TransportBar({ tracks, projectId }: { tracks?: any[]; projectId?: string }) {
+  const { isPlaying, currentTime, duration, loadedTracks, play, pause, stop, seekTo, loadTrack } = useAudioStore();
+  const [shuffle, setShuffle] = useState(false);
+  const [repeat, setRepeat] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const seekBarRef = useRef<HTMLDivElement>(null);
+  const loadedRef = useRef<Set<string>>(new Set());
+
+  // Auto-load tracks into the audio store when their buffers become available
+  useEffect(() => {
+    if (!tracks || !projectId) return;
+    const tryLoad = () => {
+      for (const track of tracks) {
+        if (!track.fileId || loadedRef.current.has(track.id)) continue;
+        if (audioBufferCache.has(track.fileId)) {
+          loadedRef.current.add(track.id);
+          loadTrack(track.id, track.fileId, projectId);
+        }
+      }
+    };
+    tryLoad();
+    const interval = setInterval(tryLoad, 500);
+    return () => clearInterval(interval);
+  }, [tracks, projectId, loadTrack]);
+
+  // Clear loaded ref when project changes
+  useEffect(() => {
+    loadedRef.current.clear();
+  }, [projectId]);
+
+  const hasTracksLoaded = loadedTracks.size > 0;
 
   const handlePlayPause = () => {
     if (isPlaying) pause();
     else play();
   };
 
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (duration <= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = (e.clientX - rect.left) / rect.width;
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    seekTo(ratio * duration);
+  };
+
+  const handleSeekDrag = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragging || duration <= 0 || !seekBarRef.current) return;
+    const rect = seekBarRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     seekTo(ratio * duration);
   };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="h-14 bg-ghost-surface flex flex-col shrink-0">
-      {/* Seek bar */}
-      <div
-        className="h-1 bg-ghost-bg cursor-pointer hover:h-2 transition-all group"
-        onClick={handleSeek}
-      >
-        <div className="h-full bg-ghost-green group-hover:bg-ghost-green" style={{ width: `${progress}%` }} />
-      </div>
-
-      <div className="flex-1 flex items-center px-4 gap-3">
-        {/* Play/Pause */}
+    <div className="shrink-0 bg-black/40 backdrop-blur-md rounded-xl border border-white/[0.06] mt-3">
+      {/* Controls row */}
+      <div className="flex items-center justify-center gap-5 py-2">
+        {/* Shuffle */}
         <button
+          onClick={() => setShuffle(!shuffle)}
+          className={`w-7 h-7 flex items-center justify-center transition-colors ${shuffle ? 'text-ghost-green' : 'text-white/40 hover:text-white/70'}`}
+          title="Shuffle"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="16 3 21 3 21 8" /><line x1="4" y1="20" x2="21" y2="3" />
+            <polyline points="21 16 21 21 16 21" /><line x1="15" y1="15" x2="21" y2="21" />
+            <line x1="4" y1="4" x2="9" y2="9" />
+          </svg>
+        </button>
+
+        {/* Previous */}
+        <button
+          onClick={() => seekTo(0)}
+          className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white transition-colors"
+          title="Restart"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="3" y="5" width="3" height="14" rx="1" />
+            <polygon points="21,5 10,12 21,19" />
+          </svg>
+        </button>
+
+        {/* Play/Pause — larger center button */}
+        <motion.button
           onClick={handlePlayPause}
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
             isPlaying
-              ? 'bg-ghost-green text-black'
-              : 'bg-ghost-surface-hover text-ghost-text-secondary hover:bg-ghost-surface-hover hover:text-white'
+              ? 'text-black shadow-[0_0_16px_rgba(124,58,237,0.4)]'
+              : 'text-black hover:shadow-[0_0_16px_rgba(124,58,237,0.3)]'
           }`}
+          style={{ background: 'linear-gradient(180deg, #7C3AED 0%, #581C87 100%)' }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
         >
           {isPlaying ? (
-            <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
+            <svg width="14" height="14" viewBox="0 0 12 14" fill="white">
               <rect x="0" y="0" width="4" height="14" rx="1" />
               <rect x="8" y="0" width="4" height="14" rx="1" />
             </svg>
           ) : (
-            <svg width="12" height="14" viewBox="0 0 10 12" fill="currentColor"><polygon points="0,0 10,6 0,12" /></svg>
+            <svg width="14" height="14" viewBox="0 0 10 12" fill="white" className="ml-0.5"><polygon points="0,0 10,6 0,12" /></svg>
           )}
-        </button>
+        </motion.button>
 
-        {/* Stop */}
+        {/* Next */}
         <button
           onClick={stop}
-          className="w-8 h-8 rounded-full bg-ghost-surface-hover flex items-center justify-center text-ghost-text-secondary hover:text-white transition-colors"
+          className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white transition-colors"
+          title="Stop"
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-            <rect x="0" y="0" width="12" height="12" rx="1" />
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="3,5 14,12 3,19" />
+            <rect x="18" y="5" width="3" height="14" rx="1" />
           </svg>
         </button>
 
-        {/* Time display */}
-        <span className="text-sm font-mono text-ghost-text-muted">
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </span>
+        {/* Repeat */}
+        <button
+          onClick={() => setRepeat(!repeat)}
+          className={`w-7 h-7 flex items-center justify-center transition-colors ${repeat ? 'text-ghost-green' : 'text-white/40 hover:text-white/70'}`}
+          title="Repeat"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="17 1 21 5 17 9" />
+            <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+            <polyline points="7 23 3 19 7 15" />
+            <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+          </svg>
+        </button>
+      </div>
 
-        {/* Playing indicator */}
-        {isPlaying && (
-          <span className="ml-auto flex items-center gap-1.5 text-[10px] text-ghost-green font-semibold uppercase tracking-wider">
-            <span className="w-2 h-2 rounded-full bg-ghost-green animate-pulse" />
-            Playing
-          </span>
-        )}
+      {/* Seek bar row */}
+      <div className="flex items-center gap-3 px-4 pb-2">
+        <span className="text-[11px] font-mono text-white/40 w-10 text-right">{formatTime(currentTime)}</span>
+        <div
+          ref={seekBarRef}
+          className="flex-1 h-1 bg-white/10 rounded-full cursor-pointer group relative"
+          onClick={handleSeekClick}
+          onMouseDown={() => setDragging(true)}
+          onMouseMove={handleSeekDrag}
+          onMouseUp={() => setDragging(false)}
+          onMouseLeave={() => setDragging(false)}
+        >
+          <div className="h-full bg-white/50 rounded-full relative transition-all" style={{ width: `${progress}%` }}>
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md" />
+          </div>
+        </div>
+        <span className="text-[11px] font-mono text-white/40 w-10">{formatTime(duration)}</span>
       </div>
     </div>
   );
@@ -1598,7 +1975,7 @@ function SamplePackContentView({
           const displayMembers = members.length > 0 ? members : user ? [{ userId: user.id, displayName: user.displayName, role: 'owner', avatarUrl: user.avatarUrl }] : [];
           return displayMembers.length > 0 && (
             <div className="mb-4">
-              <div className="flex items-center gap-4 bg-ghost-surface/80 rounded-lg border border-ghost-border/30 px-5 py-3">
+              <div className="flex items-center gap-4 bg-ghost-surface/80 rounded-lg border border-ghost-border/30 px-5 py-2.5">
                 <div className="flex items-center -space-x-2.5">
                   {[...displayMembers].sort((a: any, b: any) => (a.role === 'owner' ? -1 : b.role === 'owner' ? 1 : 0)).map((m: any) => (
                     <div key={m.userId} className="relative group cursor-pointer transition-transform hover:scale-110 hover:z-10" title={m.displayName} style={{ border: '3px solid #0F0F18', borderRadius: '50%' }}>
@@ -1623,12 +2000,21 @@ function SamplePackContentView({
                   </div>
                 </div>
 
-                <button
+                <motion.button
                   onClick={onInvite}
-                  className="shrink-0 px-4 py-1.5 text-[14px] font-bold bg-ghost-green text-black rounded-lg hover:bg-ghost-green/85 transition-colors"
+                  className="w-[120px] h-11 rounded-full text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(124,58,237,0.4),0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] shrink-0"
+                  style={{ background: 'linear-gradient(180deg, #7C3AED 0%, #581C87 100%)' }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                 >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="8.5" cy="7" r="4" />
+                    <line x1="20" y1="8" x2="20" y2="14" />
+                    <line x1="23" y1="11" x2="17" y2="11" />
+                  </svg>
                   Invite
-                </button>
+                </motion.button>
 
               </div>
             </div>
@@ -1655,19 +2041,19 @@ function SamplePackContentView({
             <div className="absolute inset-0 opacity-10 pointer-events-none">
               <Waveform seed="samplepack-demo-placeholder" height={72} />
             </div>
-            <div className="absolute inset-0 flex items-center gap-3 px-5">
+            <div className="absolute inset-0 flex items-center gap-3 pl-8 pr-5">
               {packUploading ? (
                 <span className="text-[13px] text-ghost-green animate-pulse">{packStatus}</span>
               ) : packStatus ? (
                 <span className="text-[13px] text-ghost-green">{packStatus}</span>
               ) : (
                 <>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={packDragOver ? '#00FFC8' : 'rgba(255,255,255,0.4)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={packDragOver ? '#00FFC8' : 'rgba(255,255,255,0.4)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                     <polyline points="17 8 12 3 7 8" />
                     <line x1="12" y1="3" x2="12" y2="15" />
                   </svg>
-                  <span className={`text-[14px] font-semibold ${packDragOver ? 'text-ghost-green' : 'text-purple-300'}`}>Drag audio files here</span>
+                  <span className={`text-[13px] font-bold uppercase tracking-wide ml-2 ${packDragOver ? 'text-ghost-green' : 'text-purple-300'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.6), 0 0px 2px rgba(0,0,0,0.4)' }}>Drag audio files here</span>
                   <div className="flex-1" />
                   <button
                     onClick={handlePackBrowse}
@@ -1776,23 +2162,26 @@ function DropZone({ projectId, onFilesAdded }: { projectId: string; onFilesAdded
         <div className="absolute inset-0 opacity-[0.07] pointer-events-none">
           <Waveform seed="stems-demo-placeholder" height={68} />
         </div>
-        <div className="absolute inset-0 flex items-center gap-3 px-5">
+        <div className="absolute inset-0 flex items-center gap-3 pl-8 pr-5">
           {uploading ? (
             <span className="text-[13px] text-ghost-green animate-pulse">{status}</span>
           ) : status ? (
             <span className="text-[13px] text-ghost-green">{status}</span>
           ) : (
             <>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={dragOver ? '#00FFC8' : 'rgba(255,255,255,0.25)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={dragOver ? '#00FFC8' : 'rgba(255,255,255,0.25)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="17 8 12 3 7 8" />
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
-              <span className={`text-[13px] ${dragOver ? 'text-ghost-green font-medium' : 'text-white/30'}`}>Drop your stems here</span>
+              <span className={`text-[13px] uppercase tracking-wide ml-2 ${dragOver ? 'text-ghost-green font-medium' : 'text-white/30'}`} style={{ textShadow: '0 2px 6px rgba(0,0,0,0.6), 0 0px 2px rgba(0,0,0,0.4)' }}>Drop your stems here</span>
               <div className="flex-1" />
-              <button
+              <motion.button
                 onClick={handleBrowse}
-                className="flex items-center justify-center gap-1.5 w-[110px] h-10 text-[14px] font-semibold bg-purple-600 border border-purple-500 rounded-lg text-white hover:bg-purple-500 transition-all shrink-0"
+                className="w-[120px] h-11 rounded-full text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(124,58,237,0.4),0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] shrink-0"
+                style={{ background: 'linear-gradient(180deg, #7C3AED 0%, #581C87 100%)' }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1800,7 +2189,7 @@ function DropZone({ projectId, onFilesAdded }: { projectId: string; onFilesAdded
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
                 Upload
-              </button>
+              </motion.button>
             </>
           )}
         </div>
@@ -2585,7 +2974,7 @@ export default function PluginLayout() {
             </div>
           </div>
           {/* Icons box in header */}
-          <div className="w-[248px] flex items-center justify-evenly shrink-0 glass glass-glow rounded-2xl h-11">
+          <div className="w-[300px] flex items-center justify-evenly shrink-0 glass glass-glow rounded-2xl h-11">
             <button onClick={() => { setShowFriendSearch(!showFriendSearch); setFriendSearchQuery(''); }} className="text-white/40 hover:text-ghost-green transition-colors" title="Add Friend">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
             </button>
@@ -2638,66 +3027,6 @@ export default function PluginLayout() {
               <div className="flex-1 flex flex-col min-w-0 glass glass-glow rounded-2xl overflow-hidden">
               <div className="flex-1 overflow-y-auto p-4">
                 {shareStatus && <div className="mb-3 px-4 py-2 rounded-lg bg-purple-500/20 border border-purple-500/30 text-[13px] text-purple-300 font-medium text-center">{shareStatus}</div>}
-
-                {/* Video grid — Zoom style */}
-                <div className="grid grid-cols-4 gap-2 mb-4">
-                  {Array.from({ length: 4 }).map((_, i) => {
-                    const member = members[i];
-                    const isMe = member && member.userId === user?.id;
-                    return (
-                      <div key={i} className="relative aspect-video rounded-xl overflow-hidden glass-subtle group/video">
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          {member ? (
-                            <div className="flex flex-col items-center gap-1.5">
-                              <Avatar name={member.displayName || '?'} src={member.avatarUrl} size="lg" />
-                              <span className="text-[11px] text-white/50 font-medium">{member.displayName}</span>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center gap-1.5">
-                              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/15">
-                                <path d="M23 7l-7 5 7 5V7z" />
-                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                              </svg>
-                              <span className="text-[10px] text-white/20">Waiting...</span>
-                            </div>
-                          )}
-                        </div>
-                        {/* Camera & Mic controls — show on hover for your own box */}
-                        {isMe && (
-                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                              className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-500 flex items-center justify-center transition-colors"
-                              title="Toggle Camera"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M23 7l-7 5 7 5V7z" />
-                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                              </svg>
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                              className="w-8 h-8 rounded-full bg-purple-600 text-white hover:bg-purple-500 flex items-center justify-center transition-colors"
-                              title="Toggle Mic"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                                <line x1="12" y1="19" x2="12" y2="23" />
-                                <line x1="8" y1="23" x2="16" y2="23" />
-                              </svg>
-                            </motion.button>
-                          </div>
-                        )}
-                        {member && (
-                          <span className="absolute bottom-1.5 left-2 w-2 h-2 rounded-full bg-ghost-online-green" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
 
                 {/* Project info bar */}
                 <div className="mb-4">
@@ -2863,12 +3192,12 @@ export default function PluginLayout() {
 
                 {/* Collaborators bar */}
                 <div className="mb-4">
-                <div className="flex items-center gap-4 glass-subtle px-5 h-[95px]">
+                <div className="flex items-center gap-4 glass-subtle px-5 h-[68px]">
                   <div className="flex items-center -space-x-2">
                     {[...members].sort((a: any, b: any) => (a.role === 'owner' ? -1 : b.role === 'owner' ? 1 : 0)).map((m: any) => (
                       <div key={m.userId} className="relative group cursor-pointer transition-transform hover:scale-105 hover:z-10" title={m.displayName} style={{ border: '2.5px solid #0A0A0F', borderRadius: '50%' }}>
-                        <Avatar name={m.displayName || '?'} src={m.avatarUrl} size="lg" />
-                        <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-ghost-online-green" style={{ border: '2px solid #0A0A0F' }} />
+                        <Avatar name={m.displayName || '?'} src={m.avatarUrl} size="md" />
+                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-ghost-online-green" style={{ border: '2px solid #0A0A0F' }} />
                       </div>
                     ))}
                   </div>
@@ -2887,9 +3216,12 @@ export default function PluginLayout() {
                     </div>
                   </div>
 
-                  <button
+                  <motion.button
                     onClick={() => setShowInvite(!showInvite)}
-                    className="flex items-center justify-center gap-1.5 w-[110px] h-10 text-[14px] font-semibold bg-purple-600 border border-purple-500 rounded-lg text-white hover:bg-purple-500 transition-all shrink-0"
+                    className="w-[120px] h-11 rounded-full text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(124,58,237,0.4),0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.2)] shrink-0"
+                    style={{ background: 'linear-gradient(180deg, #7C3AED 0%, #581C87 100%)' }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -2898,40 +3230,37 @@ export default function PluginLayout() {
                       <line x1="23" y1="11" x2="17" y2="11" />
                     </svg>
                     Invite
-                  </button>
+                  </motion.button>
 
                 </div>
                 </div>
 
-                {/* Track slots — 4 default, tracks replace drop zones from top */}
-                <div className="space-y-2">
-                  {Array.from({ length: Math.max(4, currentProject.tracks.length + 1) }).map((_, i) => {
-                    const track = currentProject.tracks[i];
-                    if (track) {
-                      return (
-                        <StemRow
-                          key={track.id}
-                          trackId={track.id}
-                          name={track.name || track.fileName || 'Track'}
-                          type={track.type || 'audio'}
-                          fileId={track.fileId}
-                          projectId={selectedProjectId!}
-                          createdAt={track.createdAt}
-                          onDelete={() => deleteTrack(selectedProjectId!, track.id)}
-                          onRename={(newName) => updateTrack(selectedProjectId!, track.id, { name: newName })}
-                        />
-                      );
-                    }
-                    if (i < Math.max(4, currentProject.tracks.length + 1)) {
-                      return (
-                        <div key={`drop-${i}`}>
-                          <FullMixDropZone projectId={selectedProjectId!} onFilesAdded={() => fetchProject(selectedProjectId!)} isBeat={isBeatView} />
-                        </div>
-                      );
-                    }
-                    return null;
-                  })}
+                {/* Always one drop zone at top */}
+                <FullMixDropZone projectId={selectedProjectId!} onFilesAdded={() => fetchProject(selectedProjectId!)} isBeat={isBeatView} />
+
+                {/* Uploaded tracks + remaining empty slots */}
+                <div className="space-y-2 mt-2">
+                  {[...currentProject.tracks].reverse().map((track: any) => (
+                    <StemRow
+                      key={track.id}
+                      trackId={track.id}
+                      name={track.name || track.fileName || 'Track'}
+                      type={track.type || 'audio'}
+                      fileId={track.fileId}
+                      projectId={selectedProjectId!}
+                      createdAt={track.createdAt}
+                      onDelete={() => deleteTrack(selectedProjectId!, track.id)}
+                      onRename={(newName) => updateTrack(selectedProjectId!, track.id, { name: newName })}
+                    />
+                  ))}
+                  {/* Extra empty drop zones to fill 4 total slots */}
+                  {Array.from({ length: Math.max(0, 3 - currentProject.tracks.length) }).map((_, i) => (
+                    <div key={`drop-${i}`}>
+                      <FullMixDropZone projectId={selectedProjectId!} onFilesAdded={() => fetchProject(selectedProjectId!)} isBeat={isBeatView} />
+                    </div>
+                  ))}
                 </div>
+                <TransportBar tracks={currentProject.tracks} projectId={selectedProjectId!} />
               </div>
 
               </div>
@@ -2948,7 +3277,12 @@ export default function PluginLayout() {
                   </svg>
                 </button>
                 {!chatCollapsed && (
-                  <div className="w-[248px] flex flex-col min-h-0 flex-1 overflow-hidden glass glass-glow rounded-2xl">
+                  <>
+                  {/* Video grid — persistent above chat */}
+                  <div className="w-[300px] shrink-0">
+                    <VideoGrid members={members} userId={user?.id} />
+                  </div>
+                  <div className="w-[300px] flex flex-col min-h-0 flex-1 overflow-hidden glass glass-glow rounded-2xl">
                     <div className="px-3 py-3 border-b border-white/[0.06] shrink-0">
                       {(() => {
                         const displayFriends = friends.length > 0 ? friends : [
@@ -2973,6 +3307,7 @@ export default function PluginLayout() {
                     </div>
                     <ChatPanel />
                   </div>
+                  </>
                 )}
               </div>
             </>
@@ -2999,7 +3334,12 @@ export default function PluginLayout() {
                   </svg>
                 </button>
                 {!chatCollapsed && (
-                  <div className="w-[248px] flex flex-col min-h-0 flex-1 overflow-hidden glass glass-glow rounded-2xl">
+                  <>
+                  {/* Video grid — persistent above chat */}
+                  <div className="w-[300px] shrink-0">
+                    <VideoGrid members={members} userId={user?.id} />
+                  </div>
+                  <div className="w-[300px] flex flex-col min-h-0 flex-1 overflow-hidden glass glass-glow rounded-2xl">
                     <div className="px-3 py-3 border-b border-white/[0.06] shrink-0">
                       {(() => {
                         const displayFriends = friends.length > 0 ? friends : [
@@ -3024,6 +3364,7 @@ export default function PluginLayout() {
                     </div>
                     <ChatPanel />
                   </div>
+                  </>
                 )}
               </div>
             </>

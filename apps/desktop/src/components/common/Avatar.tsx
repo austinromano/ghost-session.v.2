@@ -2,13 +2,14 @@ interface AvatarProps {
   name: string;
   src?: string | null;
   colour?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 const sizeMap = {
   sm: 'w-8 h-8 text-[11px]',
   md: 'w-9 h-9 text-[12px]',
   lg: 'w-11 h-11 text-sm',
+  xl: 'w-16 h-16 text-lg',
 };
 
 // Generate a consistent color from a name
