@@ -890,20 +890,28 @@ function VideoGrid({ members, userId }: { members: any[]; userId?: string }) {
   const [micOn, setMicOn] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showMicMenu, setShowMicMenu] = useState(false);
+  const [showCamMenu, setShowCamMenu] = useState(false);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [selectedCamId, setSelectedCamId] = useState<string>('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number>(0);
   const micMenuRef = useRef<HTMLDivElement>(null);
+  const camMenuRef = useRef<HTMLDivElement>(null);
+  const camBtnRef = useRef<HTMLButtonElement>(null);
+  const micBtnRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number } | null>(null);
 
-  // Fetch audio input devices
+  // Fetch audio + video input devices
   const fetchDevices = async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
+      setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
     } catch (err) {
       console.error('Device enumeration error:', err);
     }
@@ -956,6 +964,22 @@ function VideoGrid({ members, userId }: { members: any[]; userId?: string }) {
     }
   };
 
+  const startCamera = async (deviceId?: string) => {
+    if (streamRef.current) {
+      streamRef.current.getVideoTracks().forEach(t => t.stop());
+    }
+    try {
+      const videoConstraint = deviceId ? { deviceId: { exact: deviceId } } : true;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint, audio: micOn });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      setCameraOn(true);
+      fetchDevices();
+    } catch (err) {
+      console.error('Camera error:', err);
+    }
+  };
+
   const toggleCamera = async () => {
     if (cameraOn) {
       if (streamRef.current) {
@@ -964,14 +988,7 @@ function VideoGrid({ members, userId }: { members: any[]; userId?: string }) {
       if (videoRef.current) videoRef.current.srcObject = null;
       setCameraOn(false);
     } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: micOn });
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        setCameraOn(true);
-      } catch (err) {
-        console.error('Camera error:', err);
-      }
+      await startCamera(selectedCamId || undefined);
     }
   };
 
@@ -997,21 +1014,50 @@ function VideoGrid({ members, userId }: { members: any[]; userId?: string }) {
     }
   };
 
+  const selectCam = async (deviceId: string) => {
+    setSelectedCamId(deviceId);
+    setShowCamMenu(false);
+    if (cameraOn) {
+      await startCamera(deviceId);
+    }
+  };
+
   const handleMicClick = async () => {
     await fetchDevices();
+    setShowCamMenu(false);
+    if (!showMicMenu && micBtnRef.current) {
+      setMenuPos({ top: micBtnRef.current.getBoundingClientRect().bottom + 16 });
+    }
     setShowMicMenu(!showMicMenu);
   };
 
-  // Close mic menu on outside click
+  const handleCamClick = async () => {
+    await fetchDevices();
+    setShowMicMenu(false);
+    if (!showCamMenu && camBtnRef.current) {
+      setMenuPos({ top: camBtnRef.current.getBoundingClientRect().bottom + 16 });
+    }
+    setShowCamMenu(!showCamMenu);
+  };
+
+  // Close menus on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (micMenuRef.current && !micMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (showMicMenu && micMenuRef.current && !micMenuRef.current.contains(target) && micBtnRef.current && !micBtnRef.current.contains(target)) {
         setShowMicMenu(false);
       }
+      if (showCamMenu && camMenuRef.current && !camMenuRef.current.contains(target) && camBtnRef.current && !camBtnRef.current.contains(target)) {
+        setShowCamMenu(false);
+      }
     };
-    if (showMicMenu) document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showMicMenu]);
+    if (showMicMenu || showCamMenu) {
+      // Use setTimeout so the current click doesn't immediately close the menu
+      const timer = setTimeout(() => document.addEventListener('mousedown', handleClick), 0);
+      return () => { clearTimeout(timer); document.removeEventListener('mousedown', handleClick); };
+    }
+    return () => {};
+  }, [showMicMenu, showCamMenu]);
 
   // Attach stream to video element when camera turns on
   useEffect(() => {
@@ -1028,8 +1074,59 @@ function VideoGrid({ members, userId }: { members: any[]; userId?: string }) {
     };
   }, []);
 
+  // Load devices on mount
+  useEffect(() => { fetchDevices(); }, []);
+
   return (
-    <div className="grid grid-cols-2 gap-1.5 mb-2">
+    <div className="mb-2">
+      {/* Device dropdown menus — portaled to body */}
+      {showCamMenu && menuPos && createPortal(
+        <div ref={camMenuRef} className="fixed py-1.5 rounded-xl shadow-2xl animate-popup" style={{ zIndex: 9999, background: 'rgba(20,10,35,0.97)', border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(20px)', top: menuPos.top, right: 6, width: 304 }}>
+          <button onClick={() => { toggleCamera(); setShowCamMenu(false); }}
+            className="w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 transition-colors text-white font-medium flex items-center gap-2"
+          >
+            <span className={`w-2 h-2 rounded-full ${cameraOn ? 'bg-purple-500' : 'bg-white/20'}`} />
+            {cameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
+          </button>
+          <div className="h-px bg-white/10 mx-2 my-1" />
+          <div className="px-3 py-1 text-white/40 font-semibold uppercase tracking-wider text-[10px]">Select Camera</div>
+          <button onClick={() => selectCam('')}
+            className={`w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 transition-colors ${selectedCamId === '' ? 'text-purple-400' : 'text-white/70'}`}
+          >Default</button>
+          {videoDevices.map(d => (
+            <button key={d.deviceId} onClick={() => selectCam(d.deviceId)}
+              className={`w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 transition-colors truncate ${d.deviceId === selectedCamId ? 'text-purple-400' : 'text-white/70'}`}
+            >
+              {d.label || `Camera ${videoDevices.indexOf(d) + 1}`}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+      {showMicMenu && menuPos && createPortal(
+        <div ref={micMenuRef} className="fixed py-1.5 rounded-xl shadow-2xl animate-popup" style={{ zIndex: 9999, background: 'rgba(20,10,35,0.97)', border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(20px)', top: menuPos.top, right: 6, width: 304 }}>
+          <button onClick={() => { toggleMic(); setShowMicMenu(false); }}
+            className="w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 transition-colors text-white font-medium flex items-center gap-2"
+          >
+            <span className={`w-2 h-2 rounded-full ${micOn ? 'bg-green-500' : 'bg-white/20'}`} />
+            {micOn ? 'Mute Microphone' : 'Unmute Microphone'}
+          </button>
+          <div className="h-px bg-white/10 mx-2 my-1" />
+          <div className="px-3 py-1 text-white/40 font-semibold uppercase tracking-wider text-[10px]">Select Microphone</div>
+          <button onClick={() => selectDevice('')}
+            className={`w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 transition-colors ${selectedDeviceId === '' ? 'text-green-400' : 'text-white/70'}`}
+          >Default</button>
+          {audioDevices.map(d => (
+            <button key={d.deviceId} onClick={() => selectDevice(d.deviceId)}
+              className={`w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 transition-colors truncate ${d.deviceId === selectedDeviceId ? 'text-green-400' : 'text-white/70'}`}
+            >
+              {d.label || `Microphone ${audioDevices.indexOf(d) + 1}`}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    <div className="grid grid-cols-2 gap-1.5">
       {/* 4 equal quadrants — 2x2 grid */}
       {Array.from({ length: 4 }).map((_, i) => {
         const myIndex = members.findIndex(m => m.userId === userId);
@@ -1089,37 +1186,36 @@ function VideoGrid({ members, userId }: { members: any[]; userId?: string }) {
                 )}
               </div>
             )}
-            {/* Controls on your tile — aligned with avatar */}
+            {/* Controls on your tile */}
             {isMe && (
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-3 transition-opacity">
-                <motion.button onClick={toggleCamera} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${cameraOn ? 'bg-purple-600 text-white' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}
-                  title={cameraOn ? 'Turn off camera' : 'Turn on camera'}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
-                </motion.button>
-                <motion.button onClick={toggleMic} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${micOn ? 'bg-green-600 text-white' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}
-                  title={micOn ? 'Mute mic' : 'Unmute mic'}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
-                </motion.button>
-                <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors bg-white/10 text-white/50 hover:bg-white/20"
-                  title="Screen share"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
-                  </svg>
-                </motion.button>
+                  <motion.button ref={camBtnRef} onClick={handleCamClick} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${cameraOn ? 'bg-purple-600 text-white' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
+                  </motion.button>
+                  <motion.button ref={micBtnRef} onClick={handleMicClick} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${micOn ? 'bg-green-600 text-white' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+                  </motion.button>
+                  <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center transition-colors bg-white/10 text-white/50 hover:bg-white/20"
+                    title="Screen share"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                      <line x1="8" y1="21" x2="16" y2="21" />
+                      <line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>
+                  </motion.button>
               </div>
             )}
             {isMe && <span className="absolute bottom-1.5 left-2 w-2 h-2 rounded-full bg-ghost-online-green" />}
           </div>
         );
       })}
+    </div>
     </div>
   );
 }
