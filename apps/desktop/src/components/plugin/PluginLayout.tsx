@@ -51,10 +51,10 @@ function ProjectListSidebar({
   onCreatePack: () => void;
   friends: { id: string; displayName: string; avatarUrl: string | null }[];
 }) {
-  const [favoritesOpen, setFavoritesOpen] = useState(false);
-  const [projectsOpen, setProjectsOpen] = useState(false);
-  const [packsOpen, setPacksOpen] = useState(false);
-  const [beatsOpen, setBeatsOpen] = useState(false);
+  const [favoritesOpen, setFavoritesOpen] = useState(true);
+  const [projectsOpen, setProjectsOpen] = useState(true);
+  const [packsOpen, setPacksOpen] = useState(true);
+  const [beatsOpen, setBeatsOpen] = useState(true);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('ghost_favorites') || '[]')); } catch { return new Set(); }
   });
@@ -941,11 +941,19 @@ function FullMixDropZone({ projectId, onFilesAdded, isBeat }: { projectId: strin
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
-      className={`rounded-xl overflow-hidden transition-all ${
-        dragOver ? 'bg-ghost-green/[0.04] border border-ghost-green/30 shadow-glow-green' : 'glass-subtle'
-      }`}
+      className="rounded-xl overflow-visible relative"
     >
-      <div className={`h-[72px] relative overflow-hidden rounded-xl transition-colors ${dragOver ? 'bg-ghost-green/[0.04]' : 'bg-black/20'}`}>
+      {/* Aurora glow border */}
+      <motion.div
+        className="absolute -inset-px rounded-xl opacity-40 pointer-events-none" style={{ filter: 'blur(0.5px)' }}
+        style={{
+          background: 'linear-gradient(90deg, #00FFC8, #7C3AED, #EC4899, #F59E0B, #00B4D8, #00FFC8)',
+          backgroundSize: '200% 100%',
+        }}
+        animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+        transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+      />
+      <div className={`h-[72px] relative overflow-hidden rounded-xl transition-colors ${dragOver ? 'bg-ghost-green/[0.04]' : 'bg-[#0A0412]'}`}>
         <div className="absolute inset-0 opacity-[0.15] pointer-events-none">
           <Waveform seed="fullmix-demo-placeholder" height={72} />
         </div>
@@ -956,18 +964,18 @@ function FullMixDropZone({ projectId, onFilesAdded, isBeat }: { projectId: strin
             <span className="text-[13px] text-ghost-green">{status}</span>
           ) : (
             <>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={dragOver ? '#00FFC8' : 'rgba(192,132,252,0.8)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={dragOver ? '#00FFC8' : '#ffffff'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="17 8 12 3 7 8" />
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
-              <span className={`text-[14px] font-semibold ${dragOver ? 'text-ghost-green' : 'text-purple-300'}`}>Drag audio files here</span>
+              <span className={`text-[16px] font-bold ${dragOver ? 'text-ghost-green' : 'text-white'}`}>Drag audio files here</span>
               <div className="flex-1" />
               <button
                 onClick={handleBrowse}
-                className="flex items-center justify-center gap-1.5 w-[110px] h-9 text-[14px] font-semibold bg-purple-600 border border-purple-500 rounded-lg text-white hover:bg-purple-500 transition-all shrink-0"
+                className="flex items-center justify-center gap-1.5 w-[100px] h-9 text-[13px] font-semibold bg-purple-600 border border-purple-500 rounded-lg text-white hover:bg-purple-500 transition-all shrink-0"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="17 8 12 3 7 8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
@@ -1074,7 +1082,7 @@ function StemRow({
     <div
       draggable={!!fileId}
       onDragStart={handleDragStart}
-      className={`flex items-center bg-ghost-surface border border-ghost-border rounded-lg overflow-hidden h-[72px] ${fileId ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      className={`group flex items-center bg-ghost-surface border border-ghost-border rounded-lg overflow-hidden h-[72px] ${fileId ? 'cursor-grab active:cursor-grabbing' : ''}`}
     >
       {/* Waveform full width with overlay controls */}
       <div className="flex-1 h-full overflow-hidden bg-ghost-bg relative">
@@ -1139,25 +1147,34 @@ function StemRow({
           </div>
         )}
         {/* Action buttons overlay */}
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center gap-2">
+        <div className="absolute top-1/2 -translate-y-1/2 z-10 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ right: '20px' }}>
+          <button
+            onClick={onDelete}
+            title="Delete"
+            className="w-9 h-9 rounded-lg bg-purple-600 text-white hover:bg-red-500 transition-all flex items-center justify-center"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
           <button
             onClick={handleDownload}
             title="Download"
-            className="w-9 h-9 rounded-lg bg-black/50 text-white/80 hover:text-ghost-green hover:bg-black/70 transition-colors flex items-center justify-center backdrop-blur-sm"
+            className="w-9 h-9 rounded-lg bg-purple-600 text-white hover:bg-purple-500 transition-all flex items-center justify-center"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
           </button>
           <button
-            onClick={onDelete}
-            className="w-9 h-9 rounded-lg bg-black/50 text-white/80 hover:text-ghost-error-red hover:bg-black/70 transition-colors flex items-center justify-center backdrop-blur-sm"
+            title="Post to Feed"
+            className="w-9 h-9 rounded-lg bg-purple-600 text-white hover:bg-purple-500 transition-all flex items-center justify-center"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 3L3 10l7 3 3 7 8-17z" />
             </svg>
           </button>
         </div>
@@ -1750,9 +1767,9 @@ function DropZone({ projectId, onFilesAdded }: { projectId: string; onFilesAdded
               <div className="flex-1" />
               <button
                 onClick={handleBrowse}
-                className="flex items-center justify-center gap-1.5 w-[110px] h-9 text-[14px] font-semibold bg-purple-600 border border-purple-500 rounded-lg text-white hover:bg-purple-500 transition-all shrink-0"
+                className="flex items-center justify-center gap-1.5 w-[100px] h-9 text-[13px] font-semibold bg-purple-600 border border-purple-500 rounded-lg text-white hover:bg-purple-500 transition-all shrink-0"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="17 8 12 3 7 8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
@@ -2640,7 +2657,7 @@ export default function PluginLayout() {
                     {currentProject.updatedAt && (
                       <>
                         <div className="w-px h-5 bg-white/10 shrink-0" />
-                        <span className="text-[13px] text-ghost-green font-medium shrink-0 whitespace-nowrap">
+                        <span className="text-[14px] text-ghost-green font-medium shrink-0 whitespace-nowrap ml-2">
                           {new Date(currentProject.updatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
                       </>
@@ -2651,6 +2668,10 @@ export default function PluginLayout() {
                       </button>
                       {showProjectMenu && projectMenuRef.current && createPortal(
                         <div data-project-menu-portal className="fixed w-40 glass rounded-lg shadow-popup animate-popup border border-white/10 py-1" style={{ zIndex: 9999, top: (projectMenuRef.current.getBoundingClientRect().bottom || 0) + 4, left: (projectMenuRef.current.getBoundingClientRect().right || 0) - 160 }}>
+                          <button onClick={() => { setShowProjectMenu(false); setShowVersionHistory(!showVersionHistory); if (!showVersionHistory && selectedProjectId) fetchVersions(selectedProjectId); }} className="w-full px-3 py-1.5 text-[13px] text-left text-ghost-text-secondary hover:bg-white/[0.06] hover:text-white transition-colors flex items-center gap-2">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
+                            History
+                          </button>
                           <button onClick={handleShareProject} className="w-full px-3 py-1.5 text-[13px] text-left text-ghost-text-secondary hover:bg-white/[0.06] hover:text-white transition-colors flex items-center gap-2">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>
                             Share to Feed
@@ -2677,6 +2698,50 @@ export default function PluginLayout() {
                     </div>
                   </div>
                 </div>
+
+                {/* Version History panel */}
+                {showVersionHistory && (
+                  <div className="mb-4 glass-subtle overflow-hidden">
+                    <div className="px-4 py-2 border-b border-ghost-border/30 flex items-center justify-between">
+                      <span className="text-[13px] font-bold text-ghost-text-secondary uppercase tracking-wider">Version History</span>
+                      <span className="text-[11px] text-ghost-text-muted">{versions.length} snapshot{versions.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {versions.length === 0 ? (
+                        <div className="px-4 py-4 text-center text-[12px] text-ghost-text-muted italic">
+                          No snapshots yet — changes will be saved automatically
+                        </div>
+                      ) : (
+                        versions.map((v: any) => (
+                          <div key={v.id} className="flex items-center gap-3 px-4 py-2 border-b border-ghost-border/20 hover:bg-ghost-surface-light/30 transition-colors group">
+                            <div className="shrink-0">
+                              <Avatar name={v.createdByName || 'Unknown'} src={members.find((m: any) => m.userId === v.createdBy)?.avatarUrl || (v.createdBy === user?.id ? user?.avatarUrl : null)} size="sm" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[13px] text-ghost-text-primary font-medium truncate">{v.name}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[11px] text-ghost-text-muted">{v.createdByName || 'Unknown'}</span>
+                                <span className="text-[11px] text-ghost-green font-medium">
+                                  {new Date(v.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-[11px] font-mono text-ghost-purple bg-ghost-purple/10 px-2 py-0.5 rounded shrink-0">V{v.versionNumber}</span>
+                            {(v.snapshotJson || v.snapshot) && (
+                              <button
+                                onClick={() => handleRevert(v.id)}
+                                disabled={reverting}
+                                className="opacity-0 group-hover:opacity-100 text-[11px] font-semibold px-2 py-1 bg-ghost-surface-light border border-ghost-border rounded text-ghost-text-secondary hover:text-white hover:border-ghost-purple transition-all shrink-0"
+                              >
+                                {reverting ? '...' : 'Revert'}
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Collaborators bar */}
                 <div className="mb-4">
@@ -2705,25 +2770,10 @@ export default function PluginLayout() {
                   </div>
 
                   <button
-                    onClick={() => { setShowVersionHistory(!showVersionHistory); if (!showVersionHistory && selectedProjectId) fetchVersions(selectedProjectId); }}
-                    className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg transition-all ${
-                      showVersionHistory
-                        ? 'bg-ghost-purple text-white'
-                        : 'bg-white/5 border border-white/10 text-ghost-text-secondary hover:text-white hover:bg-white/10'
-                    }`}
-                    title="Version History"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="1 4 1 10 7 10" />
-                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                    </svg>
-                  </button>
-
-                  <button
                     onClick={() => setShowInvite(!showInvite)}
-                    className="flex items-center justify-center gap-1.5 w-[110px] h-9 text-[14px] font-semibold bg-purple-600 border border-purple-500 rounded-lg text-white hover:bg-purple-500 transition-all shrink-0"
+                    className="flex items-center justify-center gap-1.5 w-[100px] h-9 text-[13px] font-semibold bg-purple-600 border border-purple-500 rounded-lg text-white hover:bg-purple-500 transition-all shrink-0"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                       <circle cx="8.5" cy="7" r="4" />
                       <line x1="20" y1="8" x2="20" y2="14" />
@@ -2735,86 +2785,24 @@ export default function PluginLayout() {
                 </div>
                 </div>
 
-                {/* Version History panel */}
-                {showVersionHistory && (
-                  <div className="mb-4 glass-subtle overflow-hidden">
-                    <div className="px-4 py-2 border-b border-ghost-border/30 flex items-center justify-between">
-                      <span className="text-[13px] font-bold text-ghost-text-secondary uppercase tracking-wider">Version History</span>
-                      <span className="text-[11px] text-ghost-text-muted">{versions.length} snapshot{versions.length !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="max-h-48 overflow-y-auto">
-                      {versions.length === 0 ? (
-                        <div className="px-4 py-4 text-center text-[12px] text-ghost-text-muted italic">
-                          No snapshots yet — changes will be saved automatically
-                        </div>
-                      ) : (
-                        versions.map((v: any) => (
-                          <div key={v.id} className="flex items-center gap-3 px-4 py-2 border-b border-ghost-border/20 hover:bg-ghost-surface-light/30 transition-colors group">
-                            {/* User avatar */}
-                            <div className="shrink-0">
-                              <Avatar name={v.createdByName || 'Unknown'} src={members.find((m: any) => m.userId === v.createdBy)?.avatarUrl || (v.createdBy === user?.id ? user?.avatarUrl : null)} size="sm" />
-                            </div>
+                {/* Always show one drop zone at top */}
+                <FullMixDropZone projectId={selectedProjectId!} onFilesAdded={() => fetchProject(selectedProjectId!)} isBeat={isBeatView} />
 
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[13px] text-ghost-text-primary font-medium truncate">{v.name}</p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[11px] text-ghost-text-muted">{v.createdByName || 'Unknown'}</span>
-                                <span className="text-[11px] text-ghost-green font-medium">
-                                  {new Date(v.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Version number */}
-                            <span className="text-[11px] font-mono text-ghost-purple bg-ghost-purple/10 px-2 py-0.5 rounded shrink-0">
-                              V{v.versionNumber}
-                            </span>
-
-                            {/* Revert button */}
-                            {(v.snapshotJson || v.snapshot) && (
-                              <button
-                                onClick={() => handleRevert(v.id)}
-                                disabled={reverting}
-                                className="opacity-0 group-hover:opacity-100 text-[11px] font-semibold px-2 py-1 bg-ghost-surface-light border border-ghost-border rounded text-ghost-text-secondary hover:text-white hover:border-ghost-purple transition-all shrink-0"
-                              >
-                                {reverting ? '...' : 'Revert'}
-                              </button>
-                            )}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Track slots — uploaded tracks fill from top, empty slots show drop zones */}
-                <div className="space-y-2">
-                  {Array.from({ length: Math.max(4, currentProject.tracks.length + 1) }).map((_, i) => {
-                    const track = currentProject.tracks[i];
-                    if (track) {
-                      return (
-                        <StemRow
-                          key={track.id}
-                          trackId={track.id}
-                          name={track.name || track.fileName || 'Track'}
-                          type={track.type || 'audio'}
-                          fileId={track.fileId}
-                          projectId={selectedProjectId!}
-                          createdAt={track.createdAt}
-                          onDelete={() => deleteTrack(selectedProjectId!, track.id)}
-                          onRename={(newName) => updateTrack(selectedProjectId!, track.id, { name: newName })}
-                        />
-                      );
-                    }
-                    if (i < 4) {
-                      return (
-                        <div key={`drop-${i}`}>
-                          <FullMixDropZone projectId={selectedProjectId!} onFilesAdded={() => fetchProject(selectedProjectId!)} isBeat={isBeatView} />
-                        </div>
-                      );
-                    }
-                    return null;
-                  })}
+                {/* Uploaded tracks */}
+                <div className="space-y-2 mt-2">
+                  {currentProject.tracks.map((track: any) => (
+                    <StemRow
+                      key={track.id}
+                      trackId={track.id}
+                      name={track.name || track.fileName || 'Track'}
+                      type={track.type || 'audio'}
+                      fileId={track.fileId}
+                      projectId={selectedProjectId!}
+                      createdAt={track.createdAt}
+                      onDelete={() => deleteTrack(selectedProjectId!, track.id)}
+                      onRename={(newName) => updateTrack(selectedProjectId!, track.id, { name: newName })}
+                    />
+                  ))}
                 </div>
               </div>
 
