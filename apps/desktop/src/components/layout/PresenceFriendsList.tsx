@@ -4,13 +4,7 @@ import Avatar from '../common/Avatar';
 import { type OnlineUser } from '../../lib/socket';
 
 function PresenceFriendsList({ friends, onlineActivity, selectProject }: { friends: any[]; onlineActivity: Map<string, OnlineUser>; selectProject: (id: string) => void }) {
-  const defaultFriends = [
-    { id: 'demo1', displayName: 'Alex Beats', avatarUrl: 'https://randomuser.me/api/portraits/men/32.jpg' },
-    { id: 'demo2', displayName: 'Jay Producer', avatarUrl: 'https://randomuser.me/api/portraits/men/75.jpg' },
-    { id: 'demo3', displayName: 'Kira Wave', avatarUrl: 'https://randomuser.me/api/portraits/women/44.jpg' },
-    { id: 'demo4', displayName: 'Rio Sound', avatarUrl: 'https://randomuser.me/api/portraits/men/85.jpg' },
-  ];
-  const sourceFriends = friends.length > 0 ? friends : defaultFriends;
+  const sourceFriends = friends;
 
   const [orderedIds, setOrderedIds] = useState<string[]>(() => {
     try {

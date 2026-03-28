@@ -33,10 +33,10 @@ export async function initDatabase() {
       name TEXT NOT NULL,
       description TEXT DEFAULT '',
       owner_id TEXT NOT NULL REFERENCES users(id),
-      tempo REAL DEFAULT 140,
-      key TEXT DEFAULT 'C',
+      tempo REAL DEFAULT 0,
+      key TEXT DEFAULT '',
       genre TEXT DEFAULT '',
-      time_signature TEXT DEFAULT '4/4',
+      time_signature TEXT DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );

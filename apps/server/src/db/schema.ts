@@ -28,7 +28,7 @@ export const projects = sqliteTable('projects', {
   key: text('key').default(''),
   genre: text('genre').default(''),
   projectType: text('project_type').default('project'),
-  timeSignature: text('time_signature').default('4/4'),
+  timeSignature: text('time_signature').default(''),
   createdAt: timestamp('created_at').notNull(),
   updatedAt: timestamp('updated_at').notNull(),
 });
