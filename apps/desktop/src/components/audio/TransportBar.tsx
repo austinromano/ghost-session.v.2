@@ -145,12 +145,6 @@ export default function TransportBar({ tracks, projectId, projectTempo, onTempoC
           <div className="absolute right-3 flex items-center gap-2 pointer-events-auto" style={{ filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.8))' }}>
             <span className="text-[11px] font-mono text-white/70">{formatTime(currentTime)} / {formatTime(duration)}</span>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
-            <button onClick={() => onZoomChange?.('half')} className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${trackZoom === 'half' ? 'text-ghost-green' : 'text-white/30 hover:text-white/60'}`} title="Compact">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
-            </button>
-            <button onClick={() => onZoomChange?.('full')} className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${trackZoom === 'full' ? 'text-ghost-green' : 'text-white/30 hover:text-white/60'}`} title="Full">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
-            </button>
           </div>
         </div>
       </FrequencyBar>

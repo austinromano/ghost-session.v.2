@@ -4,6 +4,17 @@ import { api } from '../../lib/api';
 import { audioBufferCache } from '../../lib/audio';
 import StemRow from '../tracks/StemRow';
 
+const VISIBLE_BARS = 16;
+
+function useBarMetrics() {
+  const duration = useAudioStore((s) => s.duration);
+  const projectBpm = useAudioStore((s) => s.projectBpm);
+  const bpm = projectBpm > 0 ? projectBpm : 120;
+  const secondsPerBar = (60 / bpm) * 4;
+  const totalBars = duration > 0 ? Math.max(VISIBLE_BARS, Math.ceil(duration / secondsPerBar)) : VISIBLE_BARS;
+  return { duration, bpm, secondsPerBar, totalBars };
+}
+
 export function TrackWithWidth({ track, selectedProjectId, deleteTrack, updateTrack, trackZoom, fetchProject }: { track: any; selectedProjectId: string; deleteTrack: any; updateTrack: any; trackZoom: 'full' | 'half'; fetchProject: any }) {
   const trackBuffer = useAudioStore((s) => s.loadedTracks.get(track.id)?.buffer);
   const maxDur = useAudioStore((s) => s.duration);
@@ -61,56 +72,72 @@ export function ArrangementDropZone({ projectId, onFilesAdded, children }: { pro
   );
 }
 
-export function BarRuler() {
-  const duration = useAudioStore((s) => s.duration);
-  const projectBpm = useAudioStore((s) => s.projectBpm);
-  const seekTo = useAudioStore((s) => s.seekTo);
-  const rulerRef = useRef<HTMLDivElement>(null);
-  const [rulerWidth, setRulerWidth] = useState(800);
-
-  const bpm = projectBpm > 0 ? projectBpm : 120;
-  const secondsPerBar = (60 / bpm) * 4;
-  const totalBars = duration > 0 ? Math.max(8, Math.ceil(duration / secondsPerBar)) : 8;
+export function ArrangementScrollView({ children, showAll }: { children: React.ReactNode; showAll?: boolean }) {
+  const { duration, secondsPerBar, totalBars } = useBarMetrics();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(800);
+  const currentTime = useAudioStore((s) => s.currentTime);
+  const isPlaying = useAudioStore((s) => s.isPlaying);
 
   useEffect(() => {
-    if (!rulerRef.current) return;
+    if (!containerRef.current) return;
     const obs = new ResizeObserver((entries) => {
-      for (const e of entries) setRulerWidth(e.contentRect.width);
+      for (const e of entries) setContainerWidth(e.contentRect.width);
     });
-    obs.observe(rulerRef.current);
+    obs.observe(containerRef.current);
     return () => obs.disconnect();
   }, []);
 
-  const pxPerBar = rulerWidth / totalBars;
-  const minPxPerLabel = 28;
-  let labelEvery = 1;
-  for (const step of [1, 2, 4, 8, 16, 32, 64]) {
-    if (pxPerBar * step >= minPxPerLabel) { labelEvery = step; break; }
-  }
+  // Auto-scroll to follow playhead during playback (only in 16-bar mode)
+  useEffect(() => {
+    if (showAll || !isPlaying || !containerRef.current || duration <= 0) return;
+    const pxPerBar = containerWidth / VISIBLE_BARS;
+    const totalWidth = totalBars * pxPerBar;
+    const playheadX = (currentTime / duration) * totalWidth;
+    const scrollLeft = containerRef.current.scrollLeft;
+    const viewEnd = scrollLeft + containerWidth;
+
+    if (playheadX > viewEnd - 50 || playheadX < scrollLeft) {
+      containerRef.current.scrollLeft = Math.max(0, playheadX - containerWidth * 0.25);
+    }
+  }, [currentTime, isPlaying, duration, totalBars, containerWidth, showAll]);
+
+  const totalWidth = showAll ? '100%' : totalBars * (containerWidth / VISIBLE_BARS);
+
+  return (
+    <div ref={containerRef} className={showAll ? 'relative' : 'overflow-x-auto overflow-y-visible relative'} style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(124,58,237,0.3) transparent' }}>
+      <div style={{ width: totalWidth, minWidth: '100%', position: 'relative' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function BarRuler() {
+  const { duration, secondsPerBar, totalBars } = useBarMetrics();
+  const seekTo = useAudioStore((s) => s.seekTo);
+  const rulerRef = useRef<HTMLDivElement>(null);
 
   const handleClick = (e: React.MouseEvent) => {
     if (!rulerRef.current || duration <= 0) return;
     const rect = rulerRef.current.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
+    const pct = (e.clientX - rect.left + (rulerRef.current.parentElement?.parentElement?.scrollLeft || 0)) / rulerRef.current.offsetWidth;
     seekTo(pct * duration);
   };
 
   return (
     <div
       ref={rulerRef}
-      className="h-7 flex relative cursor-pointer select-none shrink-0 sticky top-0 z-30"
+      className="h-7 relative cursor-pointer select-none shrink-0 sticky top-0 z-30"
       style={{ background: 'rgba(10,4,18,0.95)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
       onClick={handleClick}
     >
       {Array.from({ length: totalBars }).map((_, i) => {
         const leftPct = duration > 0 ? (i * secondsPerBar / duration) * 100 : (i / totalBars) * 100;
-        const showLabel = i % labelEvery === 0;
         return (
           <div key={i} className="absolute top-0 bottom-0" style={{ left: `${leftPct}%` }}>
-            <div className={`absolute top-0 w-px ${showLabel ? 'bottom-0 bg-white/[0.12]' : 'h-2 bg-white/[0.06]'}`} />
-            {showLabel && (
-              <span className="text-[9px] font-mono text-white/35 pl-1 leading-7 select-none whitespace-nowrap">{i + 1}</span>
-            )}
+            <div className="absolute top-0 w-px bottom-0 bg-white/[0.12]" />
+            <span className="text-[9px] font-mono text-white/35 pl-1 leading-7 select-none whitespace-nowrap">{i + 1}</span>
           </div>
         );
       })}
@@ -119,11 +146,7 @@ export function BarRuler() {
 }
 
 export function BarGridOverlay() {
-  const duration = useAudioStore((s) => s.duration);
-  const projectBpm = useAudioStore((s) => s.projectBpm);
-  const bpm = projectBpm > 0 ? projectBpm : 120;
-  const secondsPerBar = (60 / bpm) * 4;
-  const totalBars = duration > 0 ? Math.max(8, Math.ceil(duration / secondsPerBar)) : 8;
+  const { duration, secondsPerBar, totalBars } = useBarMetrics();
 
   if (totalBars === 0) return null;
 
@@ -143,7 +166,6 @@ export function ArrangementPlayhead() {
   const currentTime = useAudioStore((s) => s.currentTime);
   const duration = useAudioStore((s) => s.duration);
   const isPlaying = useAudioStore((s) => s.isPlaying);
-  const playheadRef = useRef<HTMLDivElement>(null);
 
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -151,7 +173,6 @@ export function ArrangementPlayhead() {
 
   return (
     <div
-      ref={playheadRef}
       className="absolute top-0 bottom-0 w-[2px] pointer-events-none z-20"
       style={{
         left: `${Math.min(pct, 100)}%`,

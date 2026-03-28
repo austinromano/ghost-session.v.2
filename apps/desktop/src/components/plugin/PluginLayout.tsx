@@ -28,7 +28,7 @@ import Waveform from '../tracks/Waveform';
 import FullMixDropZone from '../tracks/FullMixDropZone';
 import SocialFeed from '../social/SocialFeed';
 import TransportBar from '../audio/TransportBar';
-import { TrackWithWidth, ArrangementDropZone, BarRuler, BarGridOverlay, ArrangementPlayhead } from '../project/ArrangementComponents';
+import { TrackWithWidth, ArrangementDropZone, ArrangementScrollView, BarRuler, BarGridOverlay, ArrangementPlayhead } from '../project/ArrangementComponents';
 
 // ── SamplePackContentView (tightly coupled to parent state, kept inline) ──
 
@@ -248,6 +248,7 @@ export default function PluginLayout() {
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [videoGridHidden, setVideoGridHidden] = useState(true);
   const [shareStatus, setShareStatus] = useState('');
+  const [showAllBars, setShowAllBars] = useState(false);
   const [isBeatView, setIsBeatView] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [trackZoom, setTrackZoom] = useState<'full' | 'half'>('full');
@@ -580,8 +581,24 @@ export default function PluginLayout() {
                     </div>
                     </div>
 
-                    {/* Arrangement */}
+                    {/* Arrangement — scrollable 16-bar viewport or full view */}
+                    <div className="flex items-center justify-end gap-1 mb-1">
+                      <button onClick={() => setTrackZoom('half')} className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${trackZoom === 'half' ? 'text-ghost-green' : 'text-white/30 hover:text-white/60'}`} title="Compact">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
+                      </button>
+                      <button onClick={() => setTrackZoom('full')} className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${trackZoom === 'full' ? 'text-ghost-green' : 'text-white/30 hover:text-white/60'}`} title="Full Height">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
+                      </button>
+                      <div className="w-px h-4 bg-white/10" />
+                      <button onClick={() => setShowAllBars(!showAllBars)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${showAllBars ? 'text-ghost-green bg-ghost-green/10' : 'text-white/40 hover:text-white/60 bg-white/[0.03]'}`}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          {showAllBars ? <><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" /></> : <><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></>}
+                        </svg>
+                        {showAllBars ? '16 Bars' : 'Full View'}
+                      </button>
+                    </div>
                     <ArrangementDropZone projectId={selectedProjectId!} onFilesAdded={() => fetchProject(selectedProjectId!)}>
+                      <ArrangementScrollView showAll={showAllBars}>
                       <BarRuler />
                       <FullMixDropZone projectId={selectedProjectId!} onFilesAdded={() => fetchProject(selectedProjectId!)} isBeat={isBeatView} compact={trackZoom === 'half'} />
                       <div className="relative space-y-1">
@@ -591,6 +608,7 @@ export default function PluginLayout() {
                         <BarGridOverlay />
                       </div>
                       <ArrangementPlayhead />
+                      </ArrangementScrollView>
                     </ArrangementDropZone>
                   </div>
                   </div>
