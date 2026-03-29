@@ -56,12 +56,13 @@ function PresenceFriendsList({ friends, onlineActivity, selectProject }: { frien
               </div>
               {isOnline ? (
                 <motion.span
-                  className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#0A0412] bg-ghost-online-green"
-                  animate={{ scale: [1, 1.3, 1], boxShadow: ['0 0 0px rgba(34,197,94,0)', '0 0 8px rgba(34,197,94,0.6)', '0 0 0px rgba(34,197,94,0)'] }}
+                  className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full"
+                  style={{ background: '#23A559', border: '2.5px solid #0A0412' }}
+                  animate={{ scale: [1, 1.3, 1], boxShadow: ['0 0 0px rgba(35,165,89,0)', '0 0 8px rgba(35,165,89,0.6)', '0 0 0px rgba(35,165,89,0)'] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
                 />
               ) : (
-                <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#0A0412]" style={{ background: 'transparent', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,0.2)' }} />
+                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full" style={{ background: 'transparent', border: '2.5px solid #0A0412', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,0.2)' }} />
               )}
             </div>
             <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">

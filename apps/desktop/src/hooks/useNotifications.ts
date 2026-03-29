@@ -25,15 +25,17 @@ export function useNotifications() {
     } catch {}
   };
 
-  const acceptInvite = async (id: string) => {
+  const acceptInvite = async (id: string): Promise<string | null> => {
     try {
+      const inv = invitations.find(i => i.id === id);
       await fetch(API_BASE + `/invitations/${id}/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${useAuthStore.getState().token}` },
         body: '{}',
       });
       fetchInvitations();
-    } catch {}
+      return (inv as any)?.projectId || null;
+    } catch { return null; }
   };
 
   const declineInvite = async (id: string) => {

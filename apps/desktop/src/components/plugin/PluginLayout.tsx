@@ -354,7 +354,7 @@ export default function PluginLayout() {
   // ── Handlers ──
 
   // Notification handlers delegate to hook + refresh projects on accept
-  const acceptInvite = async (id: string) => { await notifs.acceptInvite(id); fetchProjects(); };
+  const acceptInvite = async (id: string) => { const projectId = await notifs.acceptInvite(id); await fetchProjects(); if (projectId) selectProject(projectId); setShowNotifs(false); };
   const declineInvite = notifs.declineInvite;
 
   const selectProject = async (id: string) => {
@@ -374,7 +374,7 @@ export default function PluginLayout() {
     setShowSocial(false);
     setShowMarketplace(false);
     const proj = projects.find((p: any) => p.id === id);
-    setIsBeatView(proj?.projectType === 'beat');
+    setIsBeatView((proj as any)?.projectType === 'beat');
     fetchProject(id);
     fetchVersions(id);
     join(id);
@@ -421,7 +421,7 @@ export default function PluginLayout() {
     <div className="flex h-screen w-screen overflow-hidden relative">
       {/* Presence dock — full height left edge */}
       <div className="flex flex-col items-center justify-start shrink-0 w-14 pl-2 pt-4 pb-2 z-20">
-        <motion.svg onClick={() => setVizModeIdx((i) => (i + 1) % vizModes.length)} width="38" height="40" viewBox="0 0 20 22" fill="none" className="shrink-0 cursor-pointer mb-5" title={`Visualizer: ${vizMode}`} style={{ filter: 'drop-shadow(0 0 4px rgba(0,255,200,0.3))' }} animate={{ y: [0, -2, 0] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}>
+        <motion.svg onClick={() => setVizModeIdx((i) => (i + 1) % vizModes.length)} width="38" height="40" viewBox="0 0 20 22" fill="none" className="shrink-0 cursor-pointer mb-5"style={{ filter: 'drop-shadow(0 0 4px rgba(0,255,200,0.3))' }} animate={{ y: [0, -2, 0] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}>
           <defs><linearGradient id="ghostGradNav" x1="0" y1="0" x2="20" y2="22" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#00FFC8" /><stop offset="100%" stopColor="#7C3AED" /></linearGradient></defs>
           <path d="M10 1C5.5 1 2 4.5 2 9v8l2-2 2 2 2-2 2 2 2-2 2 2 2-2 2 2V9c0-4.5-3.5-8-8-8z" fill="rgba(0,255,200,0.08)" stroke="url(#ghostGradNav)" strokeWidth="1.5" strokeLinejoin="round" />
           <ellipse cx="7.5" cy="9.5" rx="1.6" ry="1.8" fill="url(#ghostGradNav)" opacity="0.9" /><ellipse cx="12.5" cy="9.5" rx="1.6" ry="1.8" fill="url(#ghostGradNav)" opacity="0.9" />

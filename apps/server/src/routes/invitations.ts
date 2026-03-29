@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import { invitations, projects, projectMembers, users } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { authMiddleware, type AuthUser } from '../middleware/auth.js';
+import { emitProjectUpdated } from '../ws/index.js';
 
 const invitationRoutes = new Hono();
 invitationRoutes.use('*', authMiddleware);
@@ -54,6 +55,7 @@ invitationRoutes.post('/:id/accept', async (c) => {
     }).run();
   } catch {} // already a member
 
+  emitProjectUpdated(inv.projectId, 'member-changed');
   return c.json({ success: true });
 });
 

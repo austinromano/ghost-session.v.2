@@ -201,6 +201,7 @@ projectRoutes.delete('/:id/members/:userId', async (c) => {
 
   await postActivityComment(projectId, user.id, `👋 removed ${removedUser?.displayName || 'a member'} from the project`);
 
+  emitProjectUpdated(projectId, 'member-changed');
   return c.json({ success: true });
 });
 
@@ -221,6 +222,7 @@ projectRoutes.post('/:id/leave', async (c) => {
     .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, user.id)))
     .run();
 
+  emitProjectUpdated(projectId, 'member-changed');
   return c.json({ success: true });
 });
 
