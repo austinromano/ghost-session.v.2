@@ -377,67 +377,7 @@ export default function ChatPanel() {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
 
-      {/* Media area */}
-      {showMediaArea && (
-        <div className="border-b border-ghost-border bg-ghost-bg p-1.5 space-y-1.5">
-          {/* Screen shares — displayed large */}
-          {(screenOn || screenShareStreams.size > 0) && (
-            <div className="space-y-1">
-              {/* Local screen share */}
-              {screenOn && (
-                <div className="relative rounded overflow-hidden bg-black aspect-video">
-                  <video
-                    ref={localScreenRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-contain"
-                  />
-                  <span className="absolute bottom-1 left-1 text-[9px] font-bold text-white bg-blue-500/80 px-1.5 py-0.5 rounded flex items-center gap-1">
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <rect x="2" y="3" width="20" height="14" rx="2" />
-                      <line x1="8" y1="21" x2="16" y2="21" />
-                      <line x1="12" y1="17" x2="12" y2="21" />
-                    </svg>
-                    Your screen
-                  </span>
-                </div>
-              )}
-              {/* Remote screen shares */}
-              {Array.from(screenShareStreams.entries()).map(([uid, { stream, displayName }]) => (
-                <RemoteVideo key={`screen-${uid}`} stream={stream} displayName={displayName} isScreen />
-              ))}
-            </div>
-          )}
-
-          {/* Camera feeds — displayed as small grid */}
-          {(videoOn || cameraStreams.size > 0) && (
-            <div className="grid gap-1" style={{
-              gridTemplateColumns: (videoOn ? 1 : 0) + cameraStreams.size <= 1 ? '1fr' : 'repeat(2, 1fr)',
-            }}>
-              {/* Local camera */}
-              {videoOn && (
-                <div className="relative rounded overflow-hidden bg-black aspect-video">
-                  <video
-                    ref={localVideoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
-                  <span className="absolute bottom-1 left-1 text-[9px] font-bold text-white bg-black/60 px-1.5 py-0.5 rounded">
-                    You
-                  </span>
-                </div>
-              )}
-              {/* Remote cameras */}
-              {Array.from(cameraStreams.entries()).map(([uid, { stream, displayName }]) => (
-                <RemoteVideo key={`cam-${uid}`} stream={stream} displayName={displayName} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Media area removed — video now handled by VideoGrid */}
 
       {/* Chat messages — newest at top, Discord-style spacing */}
       <div className="flex-1 overflow-y-auto px-4 pt-2 pb-2">

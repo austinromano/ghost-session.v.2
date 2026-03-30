@@ -248,7 +248,7 @@ export default function PluginLayout() {
   const [showSocial, setShowSocial] = useState(false);
   const [showMarketplace, setShowMarketplace] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
-  const [videoGridHidden, setVideoGridHidden] = useState(true);
+  const [videoGridHidden, setVideoGridHidden] = useState(false);
   const [shareStatus, setShareStatus] = useState('');
   const [showAllBars, setShowAllBars] = useState(false);
   const vizModes = ['bars', 'wave', 'radial', 'ghost'] as const;

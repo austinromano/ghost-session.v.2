@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import Avatar from '../common/Avatar';
+import { useWebRTC } from '../../hooks/useWebRTC';
+import { useSessionStore } from '../../stores/sessionStore';
 
 export default function VideoGrid({ members, userId, onAddFriend }: { members: any[]; userId?: string; onAddFriend?: () => void }) {
   const [cameraOn, setCameraOn] = useState(false);
@@ -23,6 +25,11 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
   const camBtnRef = useRef<HTMLButtonElement>(null);
   const micBtnRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ top: number } | null>(null);
+
+  const currentProjectId = useSessionStore((s) => s.currentProjectId);
+  const onlineUsers = useSessionStore((s) => s.onlineUsers);
+  const { remoteStreams, publishStream, replaceStream, stopStream } = useWebRTC(currentProjectId, userId || null);
+  const hasRemoteStreams = remoteStreams.size > 0;
 
   // Fetch audio + video input devices
   const fetchDevices = async () => {
@@ -48,11 +55,9 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
     analyserRef.current = analyser;
 
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
-    let logCount = 0;
     const checkLevel = () => {
       analyser.getByteFrequencyData(dataArray);
       const avg = dataArray.reduce((sum, v) => sum + v, 0) / dataArray.length;
-      if (logCount++ % 60 === 0) console.log('[Mic Level]', avg.toFixed(1));
       const speaking = avg > 5;
       setIsSpeaking(speaking);
       (window as any).__ghostSpeaking = speaking;
@@ -62,19 +67,16 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
   };
 
   const startMic = async (deviceId?: string) => {
-    // Stop existing audio tracks
     if (streamRef.current) {
       streamRef.current.getAudioTracks().forEach(t => t.stop());
     }
 
-    // Try requested device first, then fall back to others
     const devicesToTry: (string | undefined)[] = [];
     if (deviceId) devicesToTry.push(deviceId);
-    // Add all available audio devices as fallbacks
     for (const d of audioDevices) {
       if (d.deviceId !== deviceId) devicesToTry.push(d.deviceId);
     }
-    if (!deviceId) devicesToTry.unshift(undefined); // try default first
+    if (!deviceId) devicesToTry.unshift(undefined);
 
     for (const tryId of devicesToTry) {
       try {
@@ -83,23 +85,36 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
             ? { deviceId: { ideal: tryId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
             : { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         };
-        console.log('[Mic] Trying device:', tryId || 'default');
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        streamRef.current = stream;
-        setupAnalyser(stream);
+
+        // Merge with existing video track if camera is on
+        if (streamRef.current) {
+          const videoTracks = streamRef.current.getVideoTracks();
+          const newStream = new MediaStream([...videoTracks, ...stream.getAudioTracks()]);
+          streamRef.current = newStream;
+        } else {
+          streamRef.current = stream;
+        }
+
+        setupAnalyser(streamRef.current);
         setMicOn(true);
         if (tryId) setSelectedDeviceId(tryId);
         fetchDevices();
-        console.log('[Mic] Started:', stream.getAudioTracks()[0]?.label);
+
+        // Publish/update WebRTC stream
+        if (peersActive()) {
+          replaceStream(streamRef.current);
+        }
         return;
       } catch (err: any) {
         console.warn('[Mic] Failed device:', tryId || 'default', err?.name, err?.message);
         continue;
       }
     }
-    console.error('[Mic] All devices failed');
     alert('Could not access any microphone. Make sure no other app is using it exclusively.');
   };
+
+  const peersActive = () => remoteStreams.size > 0;
 
   const startCamera = async (deviceId?: string) => {
     if (streamRef.current) {
@@ -107,11 +122,26 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
     }
     try {
       const videoConstraint = deviceId ? { deviceId: { exact: deviceId } } : true;
-      const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint, audio: micOn });
-      streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint });
+
+      // Merge with existing audio tracks
+      if (streamRef.current) {
+        const audioTracks = streamRef.current.getAudioTracks();
+        const newStream = new MediaStream([...stream.getVideoTracks(), ...audioTracks]);
+        streamRef.current = newStream;
+      } else {
+        streamRef.current = stream;
+      }
+
+      if (videoRef.current) videoRef.current.srcObject = streamRef.current;
       setCameraOn(true);
       fetchDevices();
+
+      // Publish to all room members via WebRTC
+      const otherUserIds = onlineUsers.filter(u => u.userId !== userId).map(u => u.userId);
+      if (otherUserIds.length > 0) {
+        await publishStream(streamRef.current, otherUserIds);
+      }
     } catch (err) {
       console.error('Camera error:', err);
     }
@@ -124,6 +154,15 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
       }
       if (videoRef.current) videoRef.current.srcObject = null;
       setCameraOn(false);
+
+      // If mic is still on, keep audio-only stream; otherwise stop everything
+      if (!micOn) {
+        stopStream();
+      } else if (streamRef.current) {
+        const audioOnly = new MediaStream(streamRef.current.getAudioTracks());
+        streamRef.current = audioOnly;
+        replaceStream(audioOnly);
+      }
     } else {
       await startCamera(selectedCamId || undefined);
     }
@@ -138,6 +177,14 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
       if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null; }
       setIsSpeaking(false);
       setMicOn(false);
+
+      if (!cameraOn) {
+        stopStream();
+      } else if (streamRef.current) {
+        const videoOnly = new MediaStream(streamRef.current.getVideoTracks());
+        streamRef.current = videoOnly;
+        replaceStream(videoOnly);
+      }
     } else {
       await startMic(selectedDeviceId || undefined);
     }
@@ -146,7 +193,6 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
   const selectDevice = async (deviceId: string) => {
     setSelectedDeviceId(deviceId);
     setShowMicMenu(false);
-    // Always start mic when selecting a device
     await startMic(deviceId);
   };
 
@@ -201,7 +247,6 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
       }
     };
     if (showMicMenu || showCamMenu) {
-      // Use setTimeout so the current click doesn't immediately close the menu
       const timer = setTimeout(() => document.addEventListener('mousedown', handleClick), 0);
       return () => { clearTimeout(timer); document.removeEventListener('mousedown', handleClick); };
     }
@@ -220,6 +265,7 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       if (audioCtxRef.current) audioCtxRef.current.close();
+      stopStream();
     };
   }, []);
 
@@ -276,11 +322,9 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
         document.body
       )}
     <div className="grid grid-cols-2 gap-1.5">
-      {/* 4 equal quadrants — 2x2 grid */}
       {Array.from({ length: 4 }).map((_, i) => {
         const myIndex = members.findIndex(m => m.userId === userId);
         const me = myIndex >= 0 ? members[myIndex] : null;
-        // Slot 0 = you, slots 1-3 = other members
         const isMe = i === 0;
         const member = isMe ? me : (() => {
           const otherMembers = members.filter(m => m.userId !== userId);
@@ -289,9 +333,14 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
 
         if (isMe && !me) return null;
 
+        // Get remote stream for this member
+        const remoteStream = !isMe && member ? remoteStreams.get(member.userId) : null;
+        const hasRemoteVideo = remoteStream && remoteStream.getVideoTracks().length > 0;
+
         return (
           <div key={i} className="relative aspect-square">
           <div className="relative w-full h-full rounded-xl overflow-hidden group/video" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.15)' }}>
+            {/* Local video (your camera) */}
             {isMe && cameraOn && (
               <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" />
             )}
@@ -305,9 +354,7 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
             )}
             {isMe && !cameraOn && (
               <div className="absolute inset-0 flex items-center justify-center pb-6">
-                <div
-                  className="rounded-full relative"
-                >
+                <div className="rounded-full relative">
                   {isSpeaking && micOn && (
                     <motion.div
                       className="absolute inset-[-10px] rounded-full pointer-events-none"
@@ -322,7 +369,14 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
                 </div>
               </div>
             )}
-            {!isMe && (
+
+            {/* Remote video (other user's camera) */}
+            {!isMe && hasRemoteVideo && (
+              <RemoteVideo stream={remoteStream!} />
+            )}
+
+            {/* Remote user avatar (no video) */}
+            {!isMe && !hasRemoteVideo && (
               <div className="absolute inset-0 flex items-center justify-center">
                 {member ? (
                   <Avatar name={member.displayName || '?'} src={member.avatarUrl} size="xl" />
@@ -341,6 +395,14 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
                 )}
               </div>
             )}
+
+            {/* Name label for remote users with video */}
+            {!isMe && member && hasRemoteVideo && (
+              <div className="absolute bottom-2 left-2 z-10 bg-black/60 px-2 py-0.5 rounded text-[11px] text-white font-medium">
+                {member.displayName}
+              </div>
+            )}
+
             {/* Controls on your tile */}
             {isMe && (
               <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-3 transition-opacity duration-200 ${cameraOn ? 'opacity-0 group-hover/video:opacity-100' : ''}`}>
@@ -376,5 +438,20 @@ export default function VideoGrid({ members, userId, onAddFriend }: { members: a
       })}
     </div>
     </div>
+  );
+}
+
+// Separate component for remote video to handle ref attachment
+function RemoteVideo({ stream }: { stream: MediaStream }) {
+  const ref = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  return (
+    <video ref={ref} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
   );
 }
