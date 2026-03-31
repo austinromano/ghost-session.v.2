@@ -13,7 +13,7 @@
     "db:generate": "pnpm --filter @ghost/server db:generate",
     "db:migrate": "pnpm --filter @ghost/server db:migrate",
     "dev": "pnpm --filter @ghost/server dev",
-    "build": "pnpm --filter @ghost/server build && cd apps/desktop && npx vite build && cp -r dist ../server/public",
+    "build": "pnpm --filter './packages/*' build && pnpm --filter @ghost/server build && cd apps/desktop && npx vite build && cp -r dist ../server/public",
     "clean": "rm -rf apps/desktop/dist apps/server/public"
   },
   "pnpm": {
